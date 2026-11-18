@@ -1,0 +1,71 @@
+{
+  "items": [
+    {
+      "id": "itm_demo_1",
+      "type": "found",
+      "title": "白色蓝牙耳机",
+      "category": "电子产品",
+      "summary": "在图书馆三楼自习区捡到，白色充电盒，盒盖有轻微划痕。",
+      "location": "图书馆三楼自习区",
+      "eventAt": "2026-11-16T02:30:00.000Z",
+      "valueLevel": "normal",
+      "status": "stored",
+      "images": [{ "url": "/uploads/demo/earphone.webp", "sortOrder": 0 }],
+      "author": { "id": "usr_demo_student", "name": "演示同学", "isVolunteer": false },
+      "storagePoint": { "id": "stp_demo_lib", "name": "图书馆一楼服务台", "type": "normal" },
+      "createdAt": "2026-11-16T03:10:00.000Z",
+      "isFavorited": false
+    },
+    {
+      "id": "itm_demo_2",
+      "type": "lost",
+      "title": "图书馆丢了一张校园卡",
+      "category": "证件",
+      "summary": "姓名尾字是「雨」，卡面贴了蓝色贴纸，可能是 16 号下午在二楼借阅区丢的。",
+      "location": "图书馆二楼借阅区",
+      "eventAt": "2026-11-16T06:00:00.000Z",
+      "valueLevel": "normal",
+      "status": "open",
+      "images": [],
+      "author": { "id": "usr_demo_student", "name": "演示同学", "isVolunteer": false },
+      "storagePoint": null,
+      "createdAt": "2026-11-16T06:20:00.000Z",
+      "isFavorited": true
+    },
+    {
+      "id": "itm_demo_3",
+      "type": "found",
+      "title": "黑色钱包（内有现金）",
+      "category": "其他",
+      "summary": "在体育馆门口捡到，黑色短款钱包，内有少量现金和一张门禁卡。",
+      "location": "体育馆南门",
+      "eventAt": "2026-11-17T01:00:00.000Z",
+      "valueLevel": "valuable",
+      "status": "pending_storage",
+      "images": [],
+      "author": { "id": "usr_demo_vol", "name": "演示志愿者", "isVolunteer": true },
+      "storagePoint": { "id": "stp_demo_guard", "name": "保卫处失物招领点", "type": "security" },
+      "createdAt": "2026-11-17T01:12:00.000Z",
+      "isFavorited": false
+    },
+    {
+      "id": "itm_demo_4",
+      "type": "found",
+      "title": "一串宿舍钥匙",
+      "category": "钥匙",
+      "summary": "三把钥匙加一个卡通挂件，在第二教学楼 302 教室捡到。",
+      "location": "第二教学楼 302",
+      "eventAt": "2026-11-17T09:15:00.000Z",
+      "valueLevel": "normal",
+      "status": "stored",
+      "images": [],
+      "author": { "id": "usr_demo_student", "name": "演示同学", "isVolunteer": false },
+      "storagePoint": { "id": "stp_demo_dorm", "name": "宿舍服务中心", "type": "normal" },
+      "createdAt": "2026-11-17T09:30:00.000Z",
+      "isFavorited": false
+    }
+  ],
+  "total": 4,
+  "page": 1,
+  "pageSize": 20
+}
