@@ -1,5 +1,5 @@
 # 目录所有权：PR 触碰这些路径时自动请求对应负责人评审
-# 注意：CODEOWNERS 的 owner 必须是 GitHub 账号或团队，两台机器若用同一账号则仅作记录用途。
+# fkssg520 = 小灰（后端、协作基建）；heqihui1 = 小冯（前端、端到端测试）
 
 # 后端与协作基建 → 小灰
 /src/            @fkssg520
@@ -7,10 +7,13 @@
 /.github/        @fkssg520
 /package.json    @fkssg520
 
-# 前端 → agent-b（若另一台机器也用同一账号，这里写注释标明归属）
-/public/         @fkssg520
-/tests/e2e/      @fkssg520
+# 前端 → 小冯
+/public/         @heqihui1
+/tests/e2e/      @heqihui1
 
-# 文档与日志 → 双方均可
-/docs/           @fkssg520
-/journal/        @fkssg520
+# 文档与日志 → 双方共同
+/docs/           @fkssg520 @heqihui1
+/journal/        @fkssg520 @heqihui1
+/README.md       @fkssg520 @heqihui1
+/AGENTS.md       @fkssg520 @heqihui1
+/AI_COLLAB.md    @fkssg520 @heqihui1
