@@ -48,10 +48,13 @@ uploads/        用户上传图片（不入库）
 ## 协作方式（两台电脑、两个 AI）
 
 1. 每台机器的 AI 开工前读 `AGENTS.md`；
-2. 跑 `scripts/sync.ps1 -Agent xiaohui`（对面传 `agent-b`）看未读留言、PR、日志；
+2. 跑 `scripts/sync.ps1 -Agent xiaohui`（小冯传 `agent-b`）看未读留言、PR、日志；
 3. 各自在自己的分支上干活，`main` 只能通过 PR 合并；
-4. 需要对方知道的事，发 issue 并打 `to:xxx` + `kind:xxx` 标签；
-5. 每天两次由人类说"同步"触发。
+4. 推送用 `scripts/push.ps1`（自动处理本机网络问题），也可直接用 `git push`；
+5. 需要对方知道的事，发 issue 并打 `to:xxx` + `kind:xxx` 标签；
+6. 每天两次由人类说"同步"触发。
+
+分工、矛盾升级规则、人类需要做的事，见 `docs/分工协议.md`。
 
 详细规范见 `AI_COLLAB.md`。
 
