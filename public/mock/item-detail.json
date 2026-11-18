@@ -1,0 +1,34 @@
+{
+  "id": "itm_demo_1",
+  "type": "found",
+  "title": "白色蓝牙耳机",
+  "category": "电子产品",
+  "summary": "在图书馆三楼自习区捡到，白色充电盒，盒盖有轻微划痕。",
+  "location": "图书馆三楼自习区",
+  "eventAt": "2026-11-16T02:30:00.000Z",
+  "valueLevel": "normal",
+  "status": "stored",
+  "images": [{ "url": "/uploads/demo/earphone.webp", "sortOrder": 0 }],
+  "author": { "id": "usr_demo_student", "name": "演示同学", "isVolunteer": false },
+  "storagePoint": { "id": "stp_demo_lib", "name": "图书馆一楼服务台", "type": "normal" },
+  "createdAt": "2026-11-16T03:10:00.000Z",
+  "isFavorited": false,
+  "description": "自习区靠窗第三排桌面捡到，白色充电盒，盒盖有一道约 2cm 的浅划痕，左耳机本体贴了一张很小的贴纸。\n当天已交到图书馆一楼服务台登记，认领时请说明：盒内是否有备用耳塞、贴纸图案是什么。",
+  "matches": [
+    {
+      "itemId": "itm_demo_2",
+      "title": "图书馆丢了一张校园卡",
+      "score": 78,
+      "reasons": ["同一楼栋", "时间接近"]
+    },
+    {
+      "itemId": "itm_demo_4",
+      "title": "一串宿舍钥匙",
+      "score": 61,
+      "reasons": ["同一楼栋", "类别不同"]
+    }
+  ],
+  "claim": { "id": "clm_demo_1", "status": "none", "canReview": false },
+  "contact": null,
+  "isOwner": false
+}
