@@ -35,14 +35,21 @@ function json(res, status, body) {
 
 async function serveStatic(res, urlPath) {
   // 路径穿越防护：规范化后必须仍在 public 目录内
-  const rel = normalize(decodeURIComponent(urlPath)).replace(/^(\.\.[/\\])+/, '');
-  const filePath = join(PUBLIC_DIR, rel === '/' ? 'index.html' : rel);
+  // 注意：Windows 上 normalize('/') 返回 '\\'，不能只比较 '/'
+  let rel = normalize(decodeURIComponent(urlPath)).replace(/^(\.\.[/\\])+/, '');
+  if (rel === '' || rel === '.' || rel === '/' || rel === '\\') {
+    rel = 'index.html';
+  }
+  const filePath = join(PUBLIC_DIR, rel);
   if (!filePath.startsWith(PUBLIC_DIR)) {
     return json(res, 403, { error: 'forbidden' });
   }
   try {
     const info = await stat(filePath);
-    if (info.isDirectory()) throw new Error('is dir');
+    if (info.isDirectory()) {
+      // 目录请求退回到该目录下的 index.html
+      return serveStatic(res, urlPath.replace(/\/?$/, '/index.html'));
+    }
     const data = await readFile(filePath);
     res.writeHead(200, {
       'content-type': MIME[extname(filePath).toLowerCase()] || 'application/octet-stream',
