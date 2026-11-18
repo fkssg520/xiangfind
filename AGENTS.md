@@ -19,7 +19,7 @@
 
 | 身份 | 代号 | 主要职责 | 分支前缀 |
 |---|---|---|---|
-| 主控 | `lead` | 后端、数据库、认证、匹配、消息、部署、**拥有合并权** | `lead/` |
+| 主控 | `小灰` | 后端、数据库、认证、匹配、消息、部署、**拥有合并权** | `xiaohui/` |
 | 协作 | `agent-b` | 前端页面、管理后台 UI、E2E 测试、移动端适配 | `b/` |
 
 **你的身份由人类在会话开头指定**（例如"你是 agent-b"）。若没有指定且无法判断：
@@ -53,12 +53,12 @@ gh issue edit <编号> --add-label status:claimed --body "claim: <你的分支�
 
 | 路径 | 拥有者 | 说明 |
 |---|---|---|
-| `src/**` | `lead` | 后端全部代码 |
+| `src/**` | `小灰` | 后端全部代码 |
 | `public/**` | `agent-b` | 前端页面、样式、脚本 |
-| `tests/unit/**` | `lead` | 单元测试 |
+| `tests/unit/**` | `小灰` | 单元测试 |
 | `tests/e2e/**` | `agent-b` | 浏览器端到端测试 |
 | `docs/**` | 双方 | 各自新增文件用自己的前缀，改别人的文件先发 issue |
-| `scripts/`、`.github/`、根配置 | `lead` | 协作基建 |
+| `scripts/`、`.github/`、根配置 | `小灰` | 协作基建 |
 | `journal/*.md` | 双方 | 每人每天一篇，自己写自己的 |
 
 ## 5. 收工三步
@@ -66,8 +66,8 @@ gh issue edit <编号> --add-label status:claimed --body "claim: <你的分支�
 ```powershell
 # ① 提交（格式固定，见 AI_COLLAB.md 第 3 节）
 git add -A
-git commit -m "feat(auth): 注册接口增加邮箱唯一校验" -m "Agent: lead"
-git push -u origin lead/feat-auth
+git commit -m "feat(auth): 注册接口增加邮箱唯一校验" -m "Agent: 小灰"
+git push -u origin xiaohui/feat-auth
 
 # ② 开 PR（模板会自动带上自查清单）
 gh pr create --fill --base main
@@ -105,7 +105,7 @@ gh issue create --title "[问题] valuable 校验放哪一层" --label to:agent-
 
 ## 7. 当前待办
 
-真实待办在 **GitHub Issues**（标签 `to:lead` / `to:agent-b`），不在文件里——文件会冲突，issue 不会。
+真实待办在 **GitHub Issues**（标签 `to:xiaohui` / `to:agent-b`），不在文件里——文件会冲突，issue 不会。
 查看：`gh issue list --state open`
 
 ## 8. 常用命令
@@ -113,7 +113,7 @@ gh issue create --title "[问题] valuable 校验放哪一层" --label to:agent-
 | 用途 | 命令 |
 |---|---|
 | 同步一切 | `scripts/sync.ps1` |
-| 看我的未读留言 | `gh issue list --label to:lead --state open`（agent-b 改成 `to:agent-b`） |
+| 看我的未读留言 | `gh issue list --label to:xiaohui --state open`（agent-b 改成 `to:agent-b`） |
 | 看待我评审的 PR | `gh pr list --search "review-requested:@me"` |
 | 跑测试 | `npm test` |
 | 启动服务 | `npm run dev` → http://localhost:3000 |
@@ -122,5 +122,5 @@ gh issue create --title "[问题] valuable 校验放哪一层" --label to:agent-
 ## 9. 遇到冲突怎么办
 
 1. 只有自己分支上的冲突：`git pull --rebase origin main` 后重跑测试，再 push 自己分支。
-2. 涉及两个人都改过的文件：**不要自己猜**，发 `kind:blocked` issue，把冲突片段贴进去，等 `lead` 决定。
-3. `main` 上的问题：由 `lead` 处理，`agent-b` 只报告不修。
+2. 涉及两个人都改过的文件：**不要自己猜**，发 `kind:blocked` issue，把冲突片段贴进去，等 `小灰` 决定。
+3. `main` 上的问题：由 `小灰` 处理，`agent-b` 只报告不修。

@@ -25,9 +25,9 @@
 
 | 规则 | 说明 |
 |---|---|
-| 命名 | `lead/feat-auth`、`b/ui-login`、`lead/fix-claim-403` |
+| 命名 | `xiaohui/feat-auth`、`b/ui-login`、`xiaohui/fix-claim-403` |
 | 一个分支只做一件事 | 超过 400 行 diff 就该拆 |
-| 生命周期 | 合并后由 `lead` 删除；未合并的分支不得删除 |
+| 生命周期 | 合并后由 `小灰` 删除；未合并的分支不得删除 |
 | 同步方式 | 自己的分支用 `git rebase origin/main`；**绝不 force push 已推送分支**（改用 `git merge origin/main`） |
 
 > 如果确实需要 force push（例如 rebase 后修正历史），先在 issue 里 @ 对方确认，且只对自己独占的分支做。
@@ -41,7 +41,7 @@
 
 <可选的正文：为什么这么改，不是改了什么>
 
-Agent: <lead|agent-b>
+Agent: <小灰|agent-b>
 ```
 
 - `type`：`feat` `fix` `docs` `refactor` `test` `chore` `style`
@@ -56,8 +56,8 @@ Agent: <lead|agent-b>
 - **base 永远填 `main`**，标题格式同提交
 - 正文用 `.github/pull_request_template.md`，自查清单逐条勾
 - 大小：单个 PR 尽量 ≤ 400 行；超了先拆
-- 评审：`agent-b` 的 PR 由 `lead` 看；`lead` 的 PR 至少由 `agent-b` 看一眼 diff（不是走过场，是并行发现问题的机会）
-- 合并：**只有 `lead` 能合并**，用 squash merge，保持 `main` 线性
+- 评审：`agent-b` 的 PR 由 `小灰` 看；`小灰` 的 PR 至少由 `agent-b` 看一眼 diff（不是走过场，是并行发现问题的机会）
+- 合并：**只有 `小灰` 能合并**，用 squash merge，保持 `main` 线性
 - 合并前必须：`npm test` 通过 + 无冲突 + 无密钥
 
 ---
@@ -68,7 +68,7 @@ Agent: <lead|agent-b>
 
 | 标签 | 含义 |
 |---|---|
-| `to:lead` / `to:agent-b` | **收件人**（决定谁去看） |
+| `to:xiaohui` / `to:agent-b` | **收件人**（决定谁去看） |
 | `kind:question` | 需要对方回答 |
 | `kind:decision` | 需要对方拍板，附方案 |
 | `kind:blocked` | 我被卡住，需要对方解阻 |
@@ -86,7 +86,7 @@ gh issue create --title "[决策] 匹配通知去重策略" --label to:agent-b,k
 ### 5.3 收件
 
 ```powershell
-gh issue list --label to:lead --state open --json number,title,labels,createdAt
+gh issue list --label to:xiaohui --state open --json number,title,labels,createdAt
 gh issue view <编号> --comments      # 看完整对话与回复
 ```
 
@@ -103,7 +103,7 @@ gh issue close <编号> --comment "已按方案 A 实现，见 #12"  # 关闭时
 |---|---|
 | 发出 24 小时无回复 | 追加一条评论，改标签为 `kind:blocked` |
 | 阻塞超过 48 小时 | **自己按"我倾向于"的方案先做**，在 issue 里写明"已按 X 实施，可回滚"，并继续推进 |
-| 涉及不可逆操作（删数据、改表结构、动 `main`） | 不适用上面的自动推进，必须等 `lead` |
+| 涉及不可逆操作（删数据、改表结构、动 `main`） | 不适用上面的自动推进，必须等 `小灰` |
 
 > 这条是为了防止"两个 AI 礼貌地互相等待，项目停摆"。默认策略：**宁可先做再改，不要空等。**
 
@@ -121,7 +121,7 @@ gh issue close <编号> --comment "已按方案 A 实现，见 #12"  # 关闭时
 ```markdown
 # 2026-11-18
 
-## lead
+## 小灰
 - 阶段：后端骨架
 - 完成：schema、认证接口
 - 进行中：认领流程
@@ -144,8 +144,8 @@ gh issue close <编号> --comment "已按方案 A 实现，见 #12"  # 关闭时
 |---|---|
 | 自己分支落后 main | `git fetch origin && git merge origin/main`（不要 rebase 已推送的分支） |
 | 同一文件被两人改 | 以 PR 里的 diff 为准人工合并；拿不准就发 `kind:blocked` |
-| 合并后发现 `main` 坏了 | 由 `lead` 执行 `git revert <合并提交>`，**不要 reset** |
-| 对方的代码有问题 | 不改他的代码，开 issue 指出；紧急情况由 `lead` 修并在 issue 说明 |
+| 合并后发现 `main` 坏了 | 由 `小灰` 执行 `git revert <合并提交>`，**不要 reset** |
+| 对方的代码有问题 | 不改他的代码，开 issue 指出；紧急情况由 `小灰` 修并在 issue 说明 |
 
 ---
 

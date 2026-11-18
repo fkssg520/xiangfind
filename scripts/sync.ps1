@@ -1,11 +1,11 @@
 ﻿# 湘寻 · 双 AI 同步脚本
-# 用法：powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sync.ps1 -Agent lead
+# 用法：powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sync.ps1 -Agent 小灰
 #       （agent-b 那台机器传 -Agent agent-b）
 # 作用：只读。拉取远端、列出我的留言、我的 PR、待我评审的 PR、最新交接日志。
 
 param(
-    [ValidateSet('lead', 'agent-b')]
-    [string]$Agent = 'lead'
+    [ValidateSet('xiaohui', 'agent-b')]
+    [string]$Agent = 'xiaohui'
 )
 
 $ErrorActionPreference = 'Continue'

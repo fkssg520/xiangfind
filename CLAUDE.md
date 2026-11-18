@@ -9,5 +9,5 @@
 开工第一步：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sync.ps1 -Agent <lead|agent-b>
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sync.ps1 -Agent <xiaohui|agent-b>
 ```

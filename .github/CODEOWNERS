@@ -1,7 +1,7 @@
 # 目录所有权：PR 触碰这些路径时自动请求对应负责人评审
 # 注意：CODEOWNERS 的 owner 必须是 GitHub 账号或团队，两台机器若用同一账号则仅作记录用途。
 
-# 后端与协作基建 → lead
+# 后端与协作基建 → 小灰
 /src/            @fkssg520
 /scripts/        @fkssg520
 /.github/        @fkssg520

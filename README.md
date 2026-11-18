@@ -32,11 +32,11 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"   # 生
 ## 目录
 
 ```
-src/            后端（lead 负责）
+src/            后端（小灰 负责）
   server.js     入口：静态文件 + /health
 public/         前端（agent-b 负责）
 docs/           需求基线、接口约定
-tests/unit/     单元测试（lead）
+tests/unit/     单元测试（小灰）
 tests/e2e/      端到端测试（agent-b）
 journal/        每日交接日志，一人一段
 scripts/        协作脚本（sync.ps1）
@@ -48,7 +48,7 @@ uploads/        用户上传图片（不入库）
 ## 协作方式（两台电脑、两个 AI）
 
 1. 每台机器的 AI 开工前读 `AGENTS.md`；
-2. 跑 `scripts/sync.ps1 -Agent lead`（对面传 `agent-b`）看未读留言、PR、日志；
+2. 跑 `scripts/sync.ps1 -Agent xiaohui`（对面传 `agent-b`）看未读留言、PR、日志；
 3. 各自在自己的分支上干活，`main` 只能通过 PR 合并；
 4. 需要对方知道的事，发 issue 并打 `to:xxx` + `kind:xxx` 标签；
 5. 每天两次由人类说"同步"触发。
