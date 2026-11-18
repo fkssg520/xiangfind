@@ -1,0 +1,13 @@
+{
+  "user": {
+    "id": "usr_demo_student",
+    "studentId": "2023xxxx",
+    "name": "演示同学",
+    "email": "demo@example.com",
+    "role": "student",
+    "isVolunteer": false,
+    "emailVerified": true,
+    "phone": "",
+    "contact": ""
+  }
+}

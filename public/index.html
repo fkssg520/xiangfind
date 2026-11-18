@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>湘寻 · 湘潭大学校园失物招领</title>
+  <meta name="description" content="湘寻（XiangFind）：湘潭大学校园失物招领平台。捡到的东西有处可去，丢的东西有人帮找。">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <header class="topbar">
+    <a class="brand" href="#/plaza">
+      <span class="brand-mark">湘</span>
+      <span class="brand-text">
+        <b>湘寻</b>
+        <i>XIANGFIND</i>
+      </span>
+    </a>
+
+    <nav class="nav" id="nav">
+      <a href="#/plaza" data-nav="plaza">广场</a>
+      <a href="#/publish" data-nav="publish">发布</a>
+      <a href="#/me" data-nav="me">我的</a>
+      <a href="#/messages" data-nav="messages">消息<span class="badge" id="unread" hidden>0</span></a>
+      <a href="#/admin" data-nav="admin">后台</a>
+    </nav>
+
+    <div class="topbar-right">
+      <a class="btn btn-ghost" href="#/login" id="login-btn">登录</a>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ① 信息广场 -->
+    <section class="view on" id="view-plaza">
+      <div class="page-head">
+        <h1>校园失物招领广场</h1>
+        <p>捡到的东西有处可去，丢的东西有人帮找。</p>
+      </div>
+
+      <div class="toolbar">
+        <div class="seg" id="type-seg">
+          <button data-type="all" class="on">全部</button>
+          <button data-type="lost">失物</button>
+          <button data-type="found">招领</button>
+        </div>
+        <input class="input" id="q" type="search" placeholder="搜物品、地点，如「耳机」「图书馆」" autocomplete="off">
+        <button class="btn" id="search-btn">搜索</button>
+      </div>
+
+      <div class="chips" id="cats"></div>
+
+      <div class="grid" id="plaza-grid"></div>
+      <div class="empty" id="plaza-empty" hidden>没有找到符合条件的物品，换个关键词试试。</div>
+    </section>
+
+    <!-- ② 发布 -->
+    <section class="view" id="view-publish">
+      <div class="page-head">
+        <h1>发布信息</h1>
+        <p>发布后进入审核，通过即展示在广场。</p>
+      </div>
+      <div class="placeholder">
+        <h2>发布页施工中</h2>
+        <p>表单结构按 <code>docs/API契约.md</code> §4 设计，11/20 交付。</p>
+      </div>
+    </section>
+
+    <!-- ③ 物品详情 -->
+    <section class="view" id="view-item">
+      <div class="page-head">
+        <h1>物品详情</h1>
+        <p>含智能匹配推荐、认领入口与状态流转。</p>
+      </div>
+      <div class="placeholder">
+        <h2>详情页施工中</h2>
+        <p>匹配分与「为什么推荐」的展示方案在 <code>docs/设计规范.md</code> 约束下设计，11/20 交付。</p>
+      </div>
+    </section>
+
+    <!-- ④ 我的中心 -->
+    <section class="view" id="view-me">
+      <div class="page-head">
+        <h1>我的中心</h1>
+        <p>我发布的、我认领的、我的收藏。</p>
+      </div>
+      <div class="placeholder">
+        <h2>个人中心施工中</h2>
+        <p>三个页签：我的发布 / 我的认领 / 我的收藏，11/21 交付。</p>
+      </div>
+    </section>
+
+    <!-- ⑤ 消息中心 -->
+    <section class="view" id="view-messages">
+      <div class="page-head">
+        <h1>消息中心</h1>
+        <p>匹配提醒、认领进度、系统通知。</p>
+      </div>
+      <div class="placeholder">
+        <h2>消息中心施工中</h2>
+        <p>按 <code>docs/API契约.md</code> §6 渲染，未读角标点开变已读，11/21 交付。</p>
+      </div>
+    </section>
+
+    <!-- ⑥ 管理后台 -->
+    <section class="view" id="view-admin">
+      <div class="page-head">
+        <h1>管理后台</h1>
+        <p>信息审核、举报处理、统计概览。</p>
+      </div>
+      <div class="placeholder">
+        <h2>后台施工中</h2>
+        <p>四个页签，等 <code>admin</code> 接口契约补齐后接入，11/21–11/22 交付。</p>
+      </div>
+    </section>
+
+    <!-- ⑦ 登录 / 注册 -->
+    <section class="view" id="view-login">
+      <div class="page-head">
+        <h1>登录 / 注册</h1>
+        <p>校园身份验证，仅限本校师生。</p>
+      </div>
+      <div class="placeholder">
+        <h2>登录页施工中</h2>
+        <p>学号 + 密码登录、邮箱验证码注册，11/19 出静态版，11/20 接真实接口。</p>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>
