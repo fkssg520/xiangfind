@@ -6,6 +6,7 @@
 const API_PREFIX = ''; // 例：'' = 同源；'/api' = 后端前缀。mock 阶段留空。
 const MOCK = {
   items: 'mock/items.json',
+  detail: 'mock/item-detail.json',
   me: 'mock/me.json',
 };
 
@@ -38,15 +39,18 @@ function parseHash() {
 }
 
 function renderRoute() {
-  const { name } = parseHash();
+  const { name, param } = parseHash();
 
   document.querySelectorAll('.view').forEach((el) => {
     el.classList.toggle('on', el.id === `view-${name}`);
   });
 
   document.querySelectorAll('[data-nav]').forEach((a) => {
-    a.classList.toggle('on', a.dataset.nav === name);
+    const active = name === 'item' ? 'plaza' : name;
+    a.classList.toggle('on', a.dataset.nav === active);
   });
+
+  if (name === 'item') loadDetail(param);
 
   window.scrollTo(0, 0);
 }
@@ -220,3 +224,125 @@ renderRoute();
 bindPlaza();
 setUnread(3); // mock：等 /api/messages 就绪后改为真实 unreadCount
 loadItems();
+
+/* ---------- 详情页 ---------- */
+const CLAIMABLE = new Set(['stored', 'pending_storage', 'open']);
+
+async function loadDetail(id) {
+  const root = document.getElementById('detail-root');
+  if (!root) return;
+  root.replaceChildren(el('div', 'skeleton'));
+
+  let data = null;
+  try {
+    const res = await fetch(`${API_PREFIX}${MOCK.detail}`, { headers: { accept: 'application/json' } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    data = await res.json();
+  } catch (err) {
+    console.warn('[湘寻] 详情 mock 加载失败：', err.message);
+    root.replaceChildren(el('div', 'empty', '详情加载失败，稍后再试。'));
+    return;
+  }
+
+  root.replaceChildren(buildDetail(data, id));
+}
+
+function buildDetail(item, id) {
+  const wrap = el('article', 'detail');
+
+  /* 左：主信息 */
+  const main = el('div', 'detail-main');
+  main.append(el('div', 'detail-media', item.category || '物品'));
+
+  const head = el('div', 'detail-head');
+  head.append(el('span', `type-tag ${item.type}`, TYPE_LABEL[item.type] || '?'));
+  head.append(el('h1', null, item.title || '未命名物品'));
+  head.append(statusBadge(item));
+  main.append(head);
+
+  const kv = el('div', 'kv-list');
+  const row = (k, v) => {
+    const r = el('div', 'kv-row');
+    r.append(el('span', 'k', k), el('span', 'v', v));
+    kv.append(r);
+  };
+  row('类别', item.category || '未分类');
+  row('地点', item.location || '未知');
+  row('时间', fmtTime(item.eventAt));
+  row('存放点', item.storagePoint?.name || '未入库');
+  row('发布者', `${item.author?.name || '匿名'}${item.author?.isVolunteer ? '（志愿者）' : ''}`);
+  row('编号', id || item.id);
+  main.append(kv);
+
+  if (item.description) main.append(el('div', 'detail-desc', item.description));
+  wrap.append(main);
+
+  /* 右：认领 + 匹配 */
+  const side = el('div', 'detail-side');
+
+  const claim = el('div', 'side-card claim-box');
+  claim.append(el('h2', null, '认领这件物品'));
+
+  const best = (item.matches || []).reduce((m, x) => (x.score > m ? x.score : m), 0);
+  if (best > 0) {
+    const sr = el('div', 'score-row');
+    sr.append(el('b', null, String(best)));
+    sr.append(el('span', null, '/ 100 最高匹配分'));
+    claim.append(sr);
+    const meter = el('div', 'meter');
+    const fill = el('i');
+    fill.style.width = `${Math.min(100, best)}%`;
+    meter.append(fill);
+    claim.append(meter);
+  }
+
+  const tips = el('p', null, item.isOwner
+    ? '这是你发布的信息，可在「我的」里编辑或关闭。'
+    : '认领时请说明 2 项以上未公开的特征（划痕、贴纸、内容物），通过审核后才会向双方开放联系方式。');
+  claim.append(tips);
+
+  const cbtn = el('button', 'btn', item.isOwner ? '管理这条信息' : '申请认领');
+  cbtn.type = 'button';
+  if (!item.isOwner && !CLAIMABLE.has(item.status)) {
+    cbtn.disabled = true;
+    cbtn.textContent = '当前状态不可认领';
+  }
+  cbtn.addEventListener('click', () => {
+    if (cbtn.disabled) return;
+    toast('认领接口就绪后生效（M3）');
+  });
+  claim.append(cbtn);
+  side.append(claim);
+
+  const matches = item.matches || [];
+  if (matches.length) {
+    const mcard = el('div', 'side-card');
+    mcard.append(el('h2', null, '可能相关'));
+    matches.forEach((m) => {
+      const box = el('div', 'match');
+      const top = el('div', 'match-top');
+      top.append(el('b', null, m.title || m.itemId));
+      top.append(el('span', 'num', String(m.score)));
+      box.append(top);
+      if (m.reasons?.length) {
+        const rs = el('div', 'reasons');
+        m.reasons.forEach((r) => rs.append(el('span', 'reason', r)));
+        box.append(rs);
+      }
+      box.addEventListener('click', () => { location.hash = `#/item/${m.itemId}`; });
+      box.style.cursor = 'pointer';
+      mcard.append(box);
+    });
+    side.append(mcard);
+  }
+
+  wrap.append(side);
+  return wrap;
+}
+
+/* ---------- 轻提示 ---------- */
+function toast(msg) {
+  const t = el('div', 'toast', msg);
+  document.body.append(t);
+  setTimeout(() => t.remove(), 2200);
+}
