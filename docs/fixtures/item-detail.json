@@ -1,0 +1,44 @@
+{
+  "id": "itm_demo_1",
+  "type": "found",
+  "title": "白色蓝牙耳机",
+  "category": "电子产品",
+  "description": "在图书馆三楼自习区靠窗的位置捡到，白色充电盒，盒盖右下角有一道轻微划痕。已交到图书馆一楼服务台。",
+  "eventAt": "2026-11-16T02:30:00.000Z",
+  "location": "图书馆三楼自习区",
+  "valueLevel": "normal",
+  "status": "claim_pending",
+  "images": [
+    { "url": "/uploads/demo/earphone.webp", "sortOrder": 0 },
+    { "url": "/uploads/demo/earphone-2.webp", "sortOrder": 1 }
+  ],
+  "author": { "id": "usr_demo_student", "name": "演示同学", "isVolunteer": false },
+  "storagePoint": {
+    "id": "stp_demo_lib",
+    "name": "图书馆一楼服务台",
+    "type": "normal",
+    "address": "示例地址：图书馆一层东侧",
+    "hours": "08:00-22:00"
+  },
+  "createdAt": "2026-11-16T03:10:00.000Z",
+  "updatedAt": "2026-11-17T04:00:00.000Z",
+  "isFavorited": false,
+  "isOwner": false,
+  "matches": [
+    {
+      "itemId": "itm_demo_2",
+      "title": "图书馆丢了一张校园卡",
+      "score": 58,
+      "reasons": ["分类一致", "时间接近", "描述关键词重合"]
+    }
+  ],
+  "claim": {
+    "id": "clm_demo_1",
+    "status": "pending",
+    "canReview": true,
+    "publisherVerdict": null,
+    "applicantName": "演示管理员",
+    "note": "耳机是我的，盒盖右下角有一道划痕，我上周三丢在图书馆三楼。"
+  },
+  "contact": null
+}

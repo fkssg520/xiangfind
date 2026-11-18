@@ -1,0 +1,38 @@
+{
+  "messages": [
+    {
+      "id": "msg_demo_1",
+      "type": "claim",
+      "title": "有人申请认领你的物品",
+      "body": "演示管理员申请认领「白色蓝牙耳机」，请到详情页处理。",
+      "relatedType": "item",
+      "relatedId": "itm_demo_1",
+      "important": true,
+      "readAt": null,
+      "createdAt": "2026-11-18T01:00:00.000Z"
+    },
+    {
+      "id": "msg_demo_2",
+      "type": "match",
+      "title": "发现一条高相似度信息",
+      "body": "你发布的「图书馆丢了一张校园卡」与一条招领信息相似度 78%，点击查看。",
+      "relatedType": "item",
+      "relatedId": "itm_demo_2",
+      "important": true,
+      "readAt": "2026-11-18T02:10:00.000Z",
+      "createdAt": "2026-11-17T10:00:00.000Z"
+    },
+    {
+      "id": "msg_demo_3",
+      "type": "storage",
+      "title": "物品已存放",
+      "body": "「一串宿舍钥匙」已存放至宿舍服务中心，可以开始认领。",
+      "relatedType": "item",
+      "relatedId": "itm_demo_4",
+      "important": false,
+      "readAt": null,
+      "createdAt": "2026-11-17T09:40:00.000Z"
+    }
+  ],
+  "unreadCount": 2
+}
