@@ -1,14 +1,25 @@
-// 湘寻 · 服务入口（零依赖）
-// 当前仅提供静态文件与 /health，用于验证环境；业务接口在后续阶段加入 src/routes/。
+// 湘寻 · 服务入口
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DatabaseSync } from 'node:sqlite';
+import { handleApi } from './api/index.js';
+import { ensureCsrf } from './lib/csrf.js';
 
 const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
 const PUBLIC_DIR = join(ROOT, 'public');
 const PORT = Number(process.env.PORT || 3000);
+const DB_PATH = resolve(process.env.DATABASE_PATH || './data/xiangfind.db');
+
+// ---------- 数据库：启动时自动建表（可重复执行） ----------
+mkdirSync(resolve(DB_PATH, '..'), { recursive: true });
+const db = new DatabaseSync(DB_PATH);
+db.exec('PRAGMA journal_mode = WAL');
+db.exec('PRAGMA foreign_keys = ON');
+db.exec(readFileSync(new URL('./db/schema.sql', import.meta.url), 'utf8'));
+const ctx = { db };
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -74,23 +85,28 @@ const server = createServer(async (req, res) => {
       version: '0.1.0',
       uptime: Math.round(process.uptime()),
       time: new Date().toISOString(),
+      database: existsSync(DB_PATH) ? 'ok' : 'missing',
     });
   }
 
+  // 业务接口
   if (path.startsWith('/api/')) {
-    return json(res, 404, { error: 'not_implemented', path });
+    return handleApi(req, res, ctx);
   }
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     return json(res, 405, { error: 'method_not_allowed' });
   }
 
+  // 每个页面请求都确保存在 CSRF Cookie，前端从 document.cookie 读出放进请求头
+  ensureCsrf(req, res);
   return serveStatic(res, path);
 });
 
 server.listen(PORT, () => {
   console.log(`湘寻已启动 → http://localhost:${PORT}`);
   console.log(`健康检查   → http://localhost:${PORT}/health`);
+  console.log(`数据库     → ${DB_PATH}`);
   if (!existsSync(join(PUBLIC_DIR, 'index.html'))) {
     console.log('提示：public/index.html 尚未创建（由 agent-b 负责前端）。');
   }
