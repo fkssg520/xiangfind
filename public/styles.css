@@ -498,3 +498,28 @@ main { max-width: var(--page-max); margin: 0 auto; padding: var(--s-32) var(--s-
   .admin-table th:nth-child(5), .admin-table td:nth-child(5) { display: none; }
 }
 
+
+/* ---------- 认领弹窗与申请列表 ---------- */
+.modal-mask {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(70, 56, 48, .38);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.modal {
+  width: 100%; max-width: 460px;
+  background: var(--color-cream-card); border-radius: var(--radius-cards);
+  padding: var(--s-24); box-shadow: var(--shadow-hover);
+}
+.modal h3 { font-size: 19px; margin-bottom: 8px; }
+.modal-hint { font-size: 12.5px; color: var(--color-earth-brown); line-height: 1.7; margin-bottom: 12px; }
+.modal .input.area { height: 96px; margin-bottom: 12px; }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px; }
+.claim-row { padding: 10px 0; border-bottom: 1px dashed var(--line); }
+.claim-row:last-child { border-bottom: 0; }
+.claim-head { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.claim-head b { flex: 1; font-weight: 600; }
+.claim-note { font-size: 12.5px; color: var(--color-earth-brown); line-height: 1.65; margin-top: 4px; }
+.claim-note.warn { color: #9a4c37; }
+.claim-acts { display: flex; gap: 12px; margin-top: 6px; }
+@media (max-width: 760px) { .modal { padding: var(--s-16); } }
