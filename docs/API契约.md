@@ -1,153 +1,305 @@
 # 接口契约（前后端对齐用）
 
-> 用途：前端（小冯）按此写 mock，后端（小灰）按此实现，**字段名以此为准**。
-> 路径与状态码来自 `docs/需求基线.md` 第 9 节；字段名是本文件的约定。
-> 发现不一致 → 开 `to:xiaohui` + `kind:question` 的 issue，不要各自改。
+> **字段名与状态码以此为准。** 前端按此写页面，后端按此实现。
+> 发现不一致 → 开 `to:xiaohui` + `kind:question` 的 issue，**不要各自改**。
+> 最后同步：2026-11-19 · 对应 `main` 上的实现
 
 ## 0. 全局约定
 
 | 项 | 约定 |
 |---|---|
 | 编码 | JSON，`content-type: application/json; charset=utf-8` |
-| 时间 | 一律 UTC ISO 8601 字符串，如 `2026-11-18T09:38:11.000Z`；前端按本地时区展示 |
-| ID | 字符串，带前缀：`usr_` `itm_` `clm_` `msg_` `stp_` |
-| 错误体 | `{ "error": { "code": "字段名或短码", "message": "中文说明" } }` |
+| 时间 | 一律 UTC ISO 8601，如 `2026-11-18T09:38:11.000Z`；前端按本地时区展示 |
+| ID | 字符串，带前缀：`usr_` `itm_` `clm_` `msg_` `stp_` `img_` `mtc_`。**可能含 `-` 和 `_`**（base64url） |
+| 错误体 | `{ "error": { "code": "短码", "message": "中文说明" } }` |
 | 状态码 | 400 参数错 / 401 未登录 / 403 无权限 / 404 不存在 / 409 冲突 / 429 限流 / 500 服务端 |
-| 分页 | `?page=1&pageSize=20`，响应带 `total` |
+| 分页 | `?page=1&pageSize=20`，响应带 `total` / `page` / `pageSize` |
+| CSRF | 所有写操作必须带 `x-csrf-token` 头，值取自 `xf_csrf` Cookie（`GET /` 会下发） |
+| 会话 | HttpOnly Cookie `xf_sid`，7 天；前端不需要也不应该存 token |
 
-## 1. 会话
+---
 
-### POST /api/auth/login
-请求：`{ "studentId": "2023xxxx", "password": "..." }`
-响应 200：
+# 一、认证
+
+| 方法 | 路径 | 权限 | 说明 |
+|---|---|---|---|
+| POST | `/api/auth/register` | 公开 | 注册并发验证码 |
+| POST | `/api/auth/verify-email` | 公开 | 验证邮箱，**成功后自动登录** |
+| POST | `/api/auth/resend-code` | 公开 | 重发验证码，60 秒冷却 |
+| POST | `/api/auth/login` | 公开 | 登录 |
+| POST | `/api/auth/logout` | 登录 | 销毁会话，返回 204 |
+| POST | `/api/auth/forgot-password` | 公开 | 发重置验证码（不透露邮箱是否存在） |
+| POST | `/api/auth/reset-password` | 公开 | 用验证码改密码，**会踢掉该用户所有会话** |
+| GET | `/api/me` | 登录 | 当前用户 |
+
+### POST /api/auth/register
+
 ```json
-{ "user": { "id": "usr_01", "studentId": "2023xxxx", "name": "张三", "email": "a@b.c",
-            "role": "student", "isVolunteer": false, "emailVerified": true } }
+{ "studentId": "20230001", "name": "张三", "email": "a@b.c", "password": "demo1234", "confirmPassword": "demo1234" }
+```
+→ `201 { "user": {...}, "codeSent": true, "delivery": "email" | "smtp_not_configured" }`
+
+约束：学号 6-20 位字母数字且唯一；邮箱唯一；密码 8-64 位且含字母与数字。
+
+### 用户对象
+
+```json
+{ "id": "usr_x", "studentId": "20230001", "name": "张三", "email": "a@b.c",
+  "role": "student", "isVolunteer": false, "emailVerified": true }
 ```
 
-### GET /api/me
-响应 200：`{ "user": { ...同上..., "phone": "", "contact": "" } }`　未登录 → 401
+---
 
-### POST /api/auth/logout
-响应 204（无正文）
+# 二、物品
 
-## 2. 物品列表
+| 方法 | 路径 | 权限 | 说明 |
+|---|---|---|---|
+| GET | `/api/items` | **匿名可读** | 列表 + 筛选 + 分页 |
+| POST | `/api/items` | 登录 | 发布 |
+| GET | `/api/items/:id` | **匿名可读** | 详情 |
+| PATCH | `/api/items/:id` | 登录 | 编辑 / 状态流转 |
+| POST | `/api/items/:id/favorite` | 登录 | 收藏切换 |
+| POST | `/api/items/:id/storage-confirm` | 志愿者/管理员 | 确认入库（等价 `PATCH status=stored`） |
+| POST | `/api/items/:id/return` | 志愿者/管理员 | 确认归还 |
+| GET | `/api/matches/:itemId` | 登录 | 匹配摘要 |
 
-### GET /api/items?type=found&category=电子&status=stored&q=耳机&page=1&pageSize=20
+### GET /api/items 查询参数
 
-> **匿名可读**（D-012）：未登录也能调，`viewer = null`；按 IP 限流 60 次/分钟，超限 429。
-> 匿名时 `isFavorited` 恒为 `false`，`author` 保留 `id + name + isVolunteer`。
+| 参数 | 值 | 说明 |
+|---|---|---|
+| `type` | `lost` / `found` | |
+| `category` | `证件` `电子产品` `钥匙` `书籍` `衣物` `其他` | |
+| `status` | 见状态机 | 不传则**排除 `archived`** |
+| `valueLevel` | `normal` / `valuable` | |
+| `storagePointId` | `stp_*` | |
+| `q` | 关键词 | 搜标题、描述、地点、分类 |
+| `mine` | `1` | **只看我发布的**；匿名返回空 + `requiresLogin: true` |
+| `fav` | `1` | **只看我收藏的**；匿名同上 |
+| `page` / `pageSize` | 数字 | pageSize 上限 50 |
 
-响应 200：
+排序：进行中优先 → `created_at` 倒序。
+
+响应：
 ```json
-{
-  "items": [
-    {
-      "id": "itm_01",
-      "type": "found",
-      "title": "白色蓝牙耳机",
-      "category": "电子产品",
-      "summary": "描述前 60 字……",
-      "location": "图书馆三楼自习区",
-      "eventAt": "2026-11-17T02:00:00.000Z",
-      "valueLevel": "normal",
-      "status": "stored",
-      "images": [{ "url": "/uploads/xxx.webp", "sortOrder": 0 }],
-      "author": { "id": "usr_01", "name": "李四", "isVolunteer": false },
-      "storagePoint": { "id": "stp_01", "name": "图书馆服务台", "type": "normal" },
-      "createdAt": "2026-11-17T03:12:00.000Z",
-      "isFavorited": false
-    }
-  ],
-  "total": 42, "page": 1, "pageSize": 20
-}
+{ "items": [{
+    "id": "itm_x", "type": "found", "title": "白色蓝牙耳机", "category": "电子产品",
+    "summary": "描述前 60 字…", "location": "图书馆三楼", "eventAt": "2026-11-16T02:30:00.000Z",
+    "valueLevel": "normal", "status": "stored",
+    "images": [{ "url": "/uploads/x.webp", "sortOrder": 0 }],
+    "author": { "id": "usr_x", "name": "张三", "isVolunteer": false },
+    "storagePoint": { "id": "stp_x", "name": "图书馆服务台", "type": "normal" },
+    "createdAt": "2026-11-16T03:10:00.000Z", "isFavorited": false
+}], "total": 42, "page": 1, "pageSize": 20 }
 ```
 
-> **绝不返回**：完整邮箱、电话、QQ、微信。列表里作者只给 `id + name + isVolunteer`。
-
-## 3. 物品详情
-
-### GET /api/items/:id
-在列表项基础上增加：
-```json
-{
-  "description": "完整描述……",
-  "matches": [{ "itemId": "itm_02", "score": 78, "reasons": ["分类一致","时间接近"], "title": "丢失白色耳机" }],
-  "claim": { "id": "clm_01", "status": "pending", "canReview": true },
-  "contact": null,
-  "isOwner": false
-}
-```
-- `contact`：仅当认领通过（`ready_for_pickup`/`returned`）且请求者是双方之一时才有值，
-  形如 `{ "name":"张三","phone":"138****","email":"a@b.c" }`，否则 `null`
-- `matches` 只给摘要（`itemId/title/score/reasons`），不给对方联系方式
-
-## 4. 发布
+> **列表与详情都不返回邮箱/电话/QQ/微信。** 联系方式只在认领通过后单独给。
 
 ### POST /api/items
-```json
-{
-  "type": "found",
-  "title": "白色蓝牙耳机",
-  "category": "电子产品",
-  "description": "……",
-  "location": "图书馆三楼自习区",
-  "eventAt": "2026-11-17T02:00:00.000Z",
-  "valueLevel": "valuable",
-  "storagePointId": "stp_02",
-  "images": ["a1b2c3d4e5f6.png"]
-}
-```
-响应 201：`{ "item": { ...详情对象... } }`
-约束：`found` 必须有 `storagePointId`；`valuable` 的存放点必须是 `security` 类型，否则 400。
 
-## 4.1 图片上传
+```json
+{ "type": "found", "title": "白色蓝牙耳机", "category": "电子产品",
+  "description": "…", "location": "图书馆三楼", "eventAt": "2026-11-17T02:00:00.000Z",
+  "valueLevel": "valuable", "storagePointId": "stp_02",
+  "images": ["a1b2c3.png"] }
+```
+→ `201 { "item": {...详情对象...} }`
+
+约束：`found` 必须有 `storagePointId`；`valuable` 必须指向 `security` 类型存放点；
+标题不得是「东西/物品/失物/招领」；`eventAt` 不晚于当前；`images` 最多 3 个 fileName。
+
+### GET /api/items/:id 额外字段
+
+```json
+{ "description": "完整描述", "matches": [{ "itemId": "itm_y", "title": "…", "score": 78,
+    "reasons": ["分类一致","时间接近"] }],
+  "claim": { "id": "clm_x", "status": "pending", "canReview": true, "publisherVerdict": null,
+             "applicantName": "李四", "note": "…" } | null,
+  "contact": null | { "name": "张三", "email": "a@b.c", "phone": "" },
+  "isOwner": false }
+```
+
+`contact` 只在物品状态为 `ready_for_pickup` / `returned` 且请求者是发布者或已通过认领的申请人时非 null。
+
+### 状态机（D-001）
+
+| 类型 | 允许的状态 |
+|---|---|
+| `lost` | `open` → `reunited` → `archived` |
+| `found` | `pending_storage` → `stored` → `claim_pending` → `ready_for_pickup` → `returned` → `archived` |
+
+**确认入库（`stored`）权限**：所属存放点志愿者、管理员、保卫处（仅 security 点）。
+**发布者本人不能确认入库**（需求基线 §3）。
+
+---
+
+# 三、图片上传
 
 ### POST /api/uploads
+
 `multipart/form-data`，字段名 `files`，一次最多 3 张，单张 ≤ 5MB。
 
-响应 201：
 ```json
-{
-  "files": [
-    { "fileName": "a1b2c3d4e5f6.png", "url": "/uploads/a1b2c3d4e5f6.png",
-      "mimeType": "image/png", "size": 12345 }
-  ]
-}
+{ "files": [{ "fileName": "a1b2c3.png", "url": "/uploads/a1b2c3.png",
+              "mimeType": "image/png", "size": 12345 }] }
 ```
-- 类型按**文件头**判断，只接受 JPEG / PNG / WebP；扩展名与实际格式不符会被拒（400 `ext_mismatch`）
-- 发布物品时把 `fileName` 放进 `POST /api/items` 的 `images` 数组
+
+- 类型按**文件头**判断，只接受 JPEG / PNG / WebP；扩展名与实际格式不符 → `400 ext_mismatch`
 - 图片通过 `GET /uploads/<fileName>` 访问
 
-## 5. 认领
+---
+
+# 四、存放点
+
+### GET /api/storage-points（公开）
+
+```json
+{ "storagePoints": [{ "id": "stp_x", "name": "图书馆服务台", "type": "normal",
+                      "address": "…", "hours": "08:00-22:00", "note": "" }] }
+```
+只返回 `enabled = 1` 的；按 `sort_order` 排序。**发布页不要硬编码存放点。**
+
+---
+
+# 五、认领（D-005 双签）
+
+| 方法 | 路径 | 权限 | 说明 |
+|---|---|---|---|
+| POST | `/api/items/:id/claims` | 登录 | 提交认领 |
+| GET | `/api/items/:id/claims` | 登录 | 该物品的申请列表 |
+| POST | `/api/claims/:id/decision` | 见下表 | 表态 / 终审 |
+| GET | `/api/claims/mine` | 登录 | **我提交的认领**（个人中心） |
 
 ### POST /api/items/:id/claims
-请求：`{ "note": "物品特征与丢失经过……" }`
-响应 201：`{ "claim": { "id":"clm_01","status":"pending" } }`
-约束：不能申请自己的物品（400）；同一物品同一用户只能有一条 pending（409）。
 
-### POST /api/claims/:id/decision
-请求：`{ "decision": "approve", "note": "核对无误" }`　`decision` ∈ `approve | reject | agree`
-响应 200：`{ "claim": { "id":"clm_01", "status":"approved" }, "item": { "id":"itm_01", "status":"ready_for_pickup" } }`
-
-## 6. 消息
-
-### GET /api/messages?filter=unread
 ```json
-{
-  "messages": [
-    { "id": "msg_01", "type": "claim", "title": "有人申请认领你的物品",
-      "body": "……", "relatedType": "item", "relatedId": "itm_01",
-      "readAt": null, "createdAt": "2026-11-18T01:00:00.000Z" }
-  ],
-  "unreadCount": 3
-}
+{ "note": "至少 10 字的特征与经过说明" }
+```
+→ `201 { "claim": { "id": "clm_x", "itemId": "itm_x", "status": "pending", "itemStatus": "claim_pending" } }`
+
+约束：只能认领 `found`；不能认领自己的；同物品同用户只能有一条 pending（409）。
+
+### POST /api/claims/:id/decision —— **四种取值，含义不同**
+
+| `decision` | 谁能调 | 效果 |
+|---|---|---|
+| `agree` | **只有发布者** | 表态同意，等待授权角色终审 |
+| `reject` | 发布者 | 直接拒绝，物品退回 `stored` |
+| `approve` | 所属点志愿者 / 管理员 / 保卫处 | **终审通过** → `ready_for_pickup`，其余 pending 自动拒绝 |
+| `reject` | 同上（审核者） | 审核不通过 |
+
+请求：`{ "decision": "approve", "note": "核对无误" }`
+
+通过时响应：
+```json
+{ "claim": { "id": "clm_x", "status": "approved" },
+  "item": { "id": "itm_x", "status": "ready_for_pickup" } }
 ```
 
-### POST /api/messages/:id/read　→ 204
+> 发布者已 `reject` 后，授权角色不能强行 `approve` → `409 publisher_rejected`。
 
-## 7. 前端 mock 约定
+### GET /api/claims/mine
 
-- 放在 `public/mock/`，一个接口一个文件：`items.json`、`item-detail.json`、`messages.json`、`me.json`
-- **字段名必须和本文件一致**，值可用假数据（不得含真实学生信息）
-- 切换真实接口时只改 `app.js` 里的 `fetch` 前缀，不改字段映射
+```json
+{ "claims": [{ "id": "clm_x", "itemId": "itm_y", "itemTitle": "…", "itemStatus": "ready_for_pickup",
+   "itemType": "found", "itemLocation": "…", "status": "approved", "note": "…",
+   "reviewNote": "核对无误", "createdAt": "…", "reviewedAt": "…",
+   "storagePoint": { "id": "stp_x", "name": "…", "address": "…", "hours": "…" } | null }] }
+```
+`storagePoint` 只在 `approved` 时非 null（去哪领）。
+
+---
+
+# 六、站内消息
+
+| 方法 | 路径 | 权限 | 说明 |
+|---|---|---|---|
+| GET | `/api/messages?filter=all\|unread` | 登录 | 列表 + 未读数 |
+| POST | `/api/messages/:id/read` | 登录 | 标记已读，204 |
+
+```json
+{ "messages": [{ "id": "msg_x", "type": "claim|match|system|storage", "title": "…", "body": "…",
+   "relatedType": "item", "relatedId": "itm_x", "important": true,
+   "readAt": null, "createdAt": "…" }], "unreadCount": 3 }
+```
+
+---
+
+# 七、管理后台
+
+**全部需要 `role = admin`**，非管理员一律 403。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/admin/overview` | 概览计数 |
+| GET | `/api/admin/users?q=` | 搜用户（学号/邮箱/姓名） |
+| POST | `/api/admin/users/:id/volunteer` | 授予/移除志愿者 |
+| POST | `/api/admin/users/:id/status` | 停用/启用（停用会踢会话） |
+| POST | `/api/admin/users/:id/reset-password` | 替用户发重置验证码 |
+| GET | `/api/admin/storage-points` | 存放点列表（含停用） |
+| POST | `/api/admin/storage-points` | 新增 |
+| PATCH | `/api/admin/storage-points/:id` | 修改 / 启停 |
+| GET | `/api/admin/items` | 物品管理列表（含归档，可筛选） |
+| GET | `/api/admin/claims?status=pending\|all` | 跨物品的申请列表 |
+| POST | `/api/admin/messages` | 群发系统消息 |
+| GET | `/api/admin/stats` | 导出统计 |
+| POST | `/api/admin/reset-demo` | 恢复演示数据（破坏性） |
+| GET | `/api/admin/audit-logs?limit=50` | 审计日志 |
+
+### 关键请求体
+
+```jsonc
+// 志愿者授权
+{ "enabled": true, "storagePointIds": ["stp_a", "stp_b"] }
+// 移除志愿者（清空绑定，角色回 student）
+{ "enabled": false }
+
+// 停用账号
+{ "status": "disabled" }   // 或 "active"；不能停用自己或管理员
+
+// 新增/修改存放点
+{ "name": "…", "type": "normal|security", "address": "…", "hours": "…",
+  "contactName": "…", "contactPhone": "…", "note": "…", "enabled": true, "sortOrder": 0 }
+
+// 群发系统消息（二选一：role 或 userIds）
+{ "role": "all|student|volunteer|admin", "userIds": ["usr_x"],
+  "title": "1-60 字", "body": "1-1000 字" }
+→ 201 { "ok": true, "recipients": 12 }
+```
+
+### 概览
+
+```json
+{ "users": 3, "volunteers": 1, "items": 4, "inProgress": 4, "pendingStorage": 1,
+  "pendingClaims": 1, "returned": 0, "archived": 0, "unreadMessages": 1 }
+```
+
+### 导出统计
+
+```json
+{ "generatedAt": "…",
+  "users": [{ "role": "student", "c": 2 }],
+  "items": { "byStatus": [...], "byCategory": [...], "byType": [...] },
+  "claims": [{ "status": "pending", "c": 1 }],
+  "daily": [{ "day": "2026-11-19", "c": 4 }] }
+```
+
+---
+
+# 八、健康检查
+
+`GET /health` → 200 / 503
+
+```json
+{ "status": "ok", "service": "xiangfind", "version": "0.1.0", "uptime": 120,
+  "time": "…", "database": "ok", "items": 4, "diskFreeMB": 325828, "uploads": "ok" }
+```
+
+生产环境 nginx 里限制为仅本机可访问。
+
+---
+
+# 九、前端 mock 约定
+
+- 放 `public/mock/`，字段名必须和本文件一致
+- 值可用假数据，**不得含真实学生信息**
+- 接真实接口时只改 `fetch` 地址，不改字段映射
