@@ -456,7 +456,8 @@ function bindAuth() {
   });
 
   /* 注册 → 发验证码 */
-  let pendingEmail = '';
+  const PENDING_KEY = 'xf_pending_email';
+  let pendingEmail = sessionStorage.getItem(PENDING_KEY) || '';
   document.getElementById('form-register')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = e.target.querySelector('button[type=submit]');
@@ -464,7 +465,7 @@ function bindAuth() {
     busy(btn, true, '发送中…');
     const body = {
       studentId: e.target.studentId.value.trim(),
-      name: e.target.name.value.trim(),
+      name: e.target.elements.name.value.trim(),
       email: e.target.email.value.trim(),
       password: e.target.password.value,
       confirmPassword: e.target.confirmPassword.value,
@@ -473,6 +474,7 @@ function bindAuth() {
     busy(btn, false);
     if (!r.ok) return setMsg('reg-msg', errText(r, '注册失败'));
     pendingEmail = body.email;
+    sessionStorage.setItem(PENDING_KEY, pendingEmail);
     document.getElementById('verify-email').textContent = pendingEmail;
     showAuthForm('verify');
   });
@@ -485,7 +487,7 @@ function bindAuth() {
     busy(btn, true, '验证中…');
     const r = await api('/auth/verify-email', {
       method: 'POST',
-      body: { email: pendingEmail || document.getElementById('verify-email').textContent, code: e.target.code.value.trim() },
+      body: { email: pendingEmail || sessionStorage.getItem(PENDING_KEY) || document.getElementById('verify-email').textContent, code: e.target.code.value.trim() },
     });
     busy(btn, false);
     if (!r.ok) return setMsg('verify-msg', errText(r, '验证失败'));
@@ -499,6 +501,10 @@ function bindAuth() {
     showAuthForm('register');
   });
 
-  /* 未登录时访问受限视图 → 引导登录 */
-  if (!currentUser && parseHash().name !== 'login') { /* 首屏不强跳，允许游客浏览 mock */ }
+  /* restore verify step after refresh */
+  if (pendingEmail && parseHash().name === 'login') {
+    const box = document.getElementById('verify-email');
+    if (box) box.textContent = pendingEmail;
+    showAuthForm('verify');
+  }
 }
