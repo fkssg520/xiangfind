@@ -51,6 +51,32 @@ if (/^(<<<<<<<|=======|>>>>>>>)/m.test(js) || /^(<<<<<<<|=======|>>>>>>>)/m.test
   ok('没有冲突标记残留');
 }
 
+// 0.3) 重复 HTML id：getElementById 只会拿到第一个，后面的静默失效
+const dupIdList = [...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
+const idCount = new Map();
+for (const id of dupIdList) idCount.set(id, (idCount.get(id) || 0) + 1);
+const dupIds = [...idCount.entries()].filter(([, n]) => n > 1).map(([id, n]) => `#${id}×${n}`);
+if (dupIds.length === 0) ok('没有重复的 HTML id', `${idCount.size} 个 id`);
+else bad('发现重复 HTML id（后者静默失效）', dupIds.join(', '));
+
+// 0.4) CSS 花括号配平：少一个 } 会让后面所有样式失效
+const cssPath = join(PUBLIC, 'styles.css');
+if (existsSync(cssPath)) {
+  const css = readFileSync(cssPath, 'utf8');
+  // 先去掉注释与字符串，避免误算
+  const stripped = css.replace(/\/\*[\s\S]*?\*\//g, '').replace(/"(?:\\.|[^"\\])*"/g, '""').replace(/'(?:\\.|[^'\\])*'/g, "''");
+  let depth = 0;
+  let minDepth = 0;
+  for (const ch of stripped) {
+    if (ch === '{') depth += 1;
+    else if (ch === '}') { depth -= 1; if (depth < minDepth) minDepth = depth; }
+  }
+  if (depth === 0 && minDepth === 0) ok('CSS 花括号配平', `${stripped.split('{').length - 1} 个规则块`);
+  else bad('CSS 花括号不配平（会导致后续样式全部失效）', `结束深度 ${depth}，最小深度 ${minDepth}`);
+} else {
+  bad('找不到 public/styles.css');
+}
+
 // 1) 收集 html 里定义的 id
 const htmlIds = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
 ok('index.html 里的 id 数量', String(htmlIds.size));
