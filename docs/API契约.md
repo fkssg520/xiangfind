@@ -92,11 +92,29 @@
   "eventAt": "2026-11-17T02:00:00.000Z",
   "valueLevel": "valuable",
   "storagePointId": "stp_02",
-  "imageIds": ["img_01"]
+  "images": ["a1b2c3d4e5f6.png"]
 }
 ```
 响应 201：`{ "item": { ...详情对象... } }`
 约束：`found` 必须有 `storagePointId`；`valuable` 的存放点必须是 `security` 类型，否则 400。
+
+## 4.1 图片上传
+
+### POST /api/uploads
+`multipart/form-data`，字段名 `files`，一次最多 3 张，单张 ≤ 5MB。
+
+响应 201：
+```json
+{
+  "files": [
+    { "fileName": "a1b2c3d4e5f6.png", "url": "/uploads/a1b2c3d4e5f6.png",
+      "mimeType": "image/png", "size": 12345 }
+  ]
+}
+```
+- 类型按**文件头**判断，只接受 JPEG / PNG / WebP；扩展名与实际格式不符会被拒（400 `ext_mismatch`）
+- 发布物品时把 `fileName` 放进 `POST /api/items` 的 `images` 数组
+- 图片通过 `GET /uploads/<fileName>` 访问
 
 ## 5. 认领
 
