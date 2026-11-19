@@ -3,7 +3,9 @@ import { mkdirSync, writeFileSync, existsSync, statSync } from 'node:fs';
 import { join, resolve, extname } from 'node:path';
 import { randomBytes } from 'node:crypto';
 
-export const MAX_BYTES = 5 * 1024 * 1024; // 单张 5MB
+// 5MB 默认；可用 MAX_UPLOAD_MB 覆盖（.env.example 里一直写着，之前没接线）
+export const MAX_MB = Number(process.env.MAX_UPLOAD_MB) > 0 ? Number(process.env.MAX_UPLOAD_MB) : 5;
+export const MAX_BYTES = MAX_MB * 1024 * 1024;
 export const MAX_FILES = 3;
 export const MAX_PER_ITEM = 3;
 
