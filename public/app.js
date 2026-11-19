@@ -914,7 +914,7 @@ async function loadAdmin(tab) {
   const tabs = el('div', 'admin-tabs');
   const pane = el('div', 'admin-pane');
 
-  const TABS = [['overview', '概览'], ['items', '信息'], ['users', '用户'], ['points', '存放点']];
+  const TABS = [['overview', '概览'], ['claims', '审核'], ['items', '信息'], ['users', '用户'], ['points', '存放点']];
   const show = (key) => {
     [...tabs.children].forEach((b) => b.classList.toggle('on', b.dataset.tab === key));
     pane.replaceChildren(el('div', 'skeleton'));
@@ -929,7 +929,24 @@ async function loadAdmin(tab) {
 
   page.append(tabs, pane);
   root.replaceChildren(page);
-  show(['overview', 'items', 'users', 'points'].includes(tab) ? tab : 'overview');
+  show(TABS.some(([k]) => k === tab) ? tab : 'overview');
+}
+
+function adminTable(headers, rows, renderRow) {
+  const wrap = el('div', 'admin-table-wrap');
+  const table = el('table', 'admin-table');
+  const head = document.createElement('tr');
+  headers.forEach((t) => head.append(el('th', null, t)));
+  table.append(head);
+  rows.forEach((r) => table.append(renderRow(r)));
+  wrap.append(table);
+  return wrap;
+}
+
+function adminAct(label, handler, muted) {
+  const s = el('span', `admin-act${muted ? ' muted' : ''}`, label);
+  s.addEventListener('click', handler);
+  return s;
 }
 
 async function renderAdminPane(key, pane) {
@@ -948,48 +965,61 @@ async function renderAdminPane(key, pane) {
       return;
     }
 
+    if (key === 'claims') {
+      const r = await api('/admin/claims?status=pending');
+      if (!r.ok) return pane.replaceChildren(emptyBox('审核列表加载失败'));
+      const rows = r.data.claims || [];
+      if (!rows.length) return pane.replaceChildren(emptyBox('没有待审核的认领申请'));
+
+      pane.replaceChildren(adminTable(['物品', '申请人', '申请说明', '提交时间', '操作'], rows, (c) => {
+        const tr = document.createElement('tr');
+        const t1 = document.createElement('td');
+        t1.append(el('div', 't', c.itemTitle || ''));
+        t1.append(el('div', 'sub', c.itemId || ''));
+        tr.append(t1);
+        tr.append(el('td', 'sub', c.applicantName || ''));
+        const t3 = document.createElement('td');
+        t3.append(el('div', 'sub', c.note || ''));
+        if (c.publisherVerdict) t3.append(el('div', 'sub', '发布者表态：' + (c.publisherVerdict === 'agree' ? '同意' : '拒绝')));
+        tr.append(t3);
+        tr.append(el('td', 'sub', fmtTime(c.createdAt)));
+        const t5 = document.createElement('td');
+        t5.append(adminAct('确认发放', () => adminDecideClaim(c.id, 'approve', pane)));
+        t5.append(adminAct('不予认领', () => adminDecideClaim(c.id, 'reject', pane), true));
+        tr.append(t5);
+        return tr;
+      }));
+      return;
+    }
+
     if (key === 'items') {
-      const r = await api('/admin/items?status=' + encodeURIComponent('all'));
+      const r = await api('/admin/items?status=all');
       if (!r.ok) return pane.replaceChildren(emptyBox('信息列表加载失败'));
       const rows = r.data.items || [];
       if (!rows.length) return pane.replaceChildren(emptyBox('还没有信息'));
 
-      const wrap = el('div', 'admin-table-wrap');
-      const table = el('table', 'admin-table');
-      const head = document.createElement('tr');
-      ['信息', '类型', '状态', '地点', '发布者', '操作'].forEach((t) => head.append(el('th', null, t)));
-      table.append(head);
-
-      rows.forEach((it) => {
+      pane.replaceChildren(adminTable(['信息', '类型', '状态', '地点', '发布者', '操作'], rows, (it) => {
         const tr = document.createElement('tr');
-        const tdTitle = document.createElement('td');
-        tdTitle.append(el('div', 't', it.title || '未命名'));
-        tdTitle.append(el('div', 'sub', it.category || ''));
-        tr.append(tdTitle);
+        const td = document.createElement('td');
+        td.append(el('div', 't', it.title || '未命名'));
+        td.append(el('div', 'sub', it.category || ''));
+        tr.append(td);
         tr.append(el('td', null, it.type === 'lost' ? '失物' : '招领'));
         const tdStatus = document.createElement('td');
-        const table2 = STATUS_MAP[it.type] || {};
-        const [label, tone] = table2[it.status] || [it.status, 'muted'];
+        const map = STATUS_MAP[it.type] || {};
+        const [label, tone] = map[it.status] || [it.status, 'muted'];
         tdStatus.append(el('span', `status ${tone}`, label));
         tr.append(tdStatus);
         tr.append(el('td', 'sub', it.location || ''));
         tr.append(el('td', 'sub', it.author?.name || ''));
-
-        const tdAct = document.createElement('td');
+        const acts = document.createElement('td');
         if (it.status === 'pending_storage') {
-          const ok = el('span', 'admin-act', '确认入库');
-          ok.addEventListener('click', () => patchAdminItem(it.id, 'stored', pane));
-          tdAct.append(ok);
+          acts.append(adminAct('确认入库', () => adminPatchItem(it.id, 'stored', pane)));
         }
-        const down = el('span', 'admin-act muted', '下架');
-        down.addEventListener('click', () => patchAdminItem(it.id, 'archived', pane));
-        tdAct.append(down);
-        tr.append(tdAct);
-
-        table.append(tr);
-      });
-      wrap.append(table);
-      pane.replaceChildren(wrap);
+        acts.append(adminAct('下架', () => adminPatchItem(it.id, 'archived', pane), true));
+        tr.append(acts);
+        return tr;
+      }));
       return;
     }
 
@@ -997,58 +1027,340 @@ async function renderAdminPane(key, pane) {
       const r = await api('/admin/users');
       if (!r.ok) return pane.replaceChildren(emptyBox('用户列表加载失败'));
       const rows = r.data.users || [];
-      const wrap = el('div', 'admin-table-wrap');
-      const table = el('table', 'admin-table');
-      const head = document.createElement('tr');
-      ['姓名', '学号', '角色', '状态', '发布数'].forEach((t) => head.append(el('th', null, t)));
-      table.append(head);
-      rows.forEach((u) => {
+      const me = currentUser;
+
+      pane.replaceChildren(adminTable(['姓名', '学号', '角色', '状态', '发布数', '操作'], rows, (u) => {
         const tr = document.createElement('tr');
         tr.append(el('td', 't', u.name || ''));
         tr.append(el('td', 'sub', u.studentId || ''));
         tr.append(el('td', 'sub', ROLE_TEXT[u.role] || u.role));
-        tr.append(el('td', 'sub', u.status || ''));
+        tr.append(el('td', 'sub', u.status === 'disabled' ? '已停用' : '正常'));
         tr.append(el('td', 'sub', String(u.itemCount ?? '')));
-        table.append(tr);
-      });
-      wrap.append(table);
-      pane.replaceChildren(wrap);
+
+        const acts = document.createElement('td');
+        const isAdminRow = u.role === 'admin';
+        if (!isAdminRow) {
+          if (u.role === 'volunteer') {
+            acts.append(adminAct('取消志愿者', () => adminSetVolunteer(u, false, pane)));
+          } else {
+            acts.append(adminAct('设为志愿者', () => openVolunteerDialog(u, pane)));
+          }
+          if (u.id === me?.id || isAdminRow) {
+            acts.append(adminAct('停用', () => {}, true));
+          } else if (u.status === 'disabled') {
+            acts.append(adminAct('启用', () => adminSetStatus(u.id, 'active', pane)));
+          } else {
+            acts.append(adminAct('停用', () => adminSetStatus(u.id, 'disabled', pane), true));
+          }
+        }
+        tr.append(acts);
+        return tr;
+      }));
       return;
     }
 
+    // 存放点
     const r = await api('/admin/storage-points');
     if (!r.ok) return pane.replaceChildren(emptyBox('存放点加载失败'));
     const rows = r.data.storagePoints || [];
-    const wrap = el('div', 'admin-table-wrap');
-    const table = el('table', 'admin-table');
-    const head = document.createElement('tr');
-    ['名称', '类型', '地址', '时间', '状态'].forEach((t) => head.append(el('th', null, t)));
-    table.append(head);
-    rows.forEach((p) => {
+
+    const headBar = el('div', 'admin-bar');
+    headBar.append(adminAct('+ 新增存放点', () => openPointDialog(pane)));
+    const table = adminTable(['名称', '类型', '地址', '时间', '在库', '状态', '操作'], rows, (p) => {
       const tr = document.createElement('tr');
       tr.append(el('td', 't', p.name || ''));
       tr.append(el('td', 'sub', p.type === 'security' ? '保卫处' : '普通'));
       tr.append(el('td', 'sub', p.address || ''));
       tr.append(el('td', 'sub', p.hours || ''));
-      tr.append(el('td', 'sub', p.enabled === 0 ? '停用' : '启用'));
-      table.append(tr);
+      tr.append(el('td', 'sub', String(p.itemCount ?? 0)));
+      tr.append(el('td', 'sub', p.enabled === false ? '已停用' : '启用中'));
+      const acts = document.createElement('td');
+      acts.append(adminAct(p.enabled === false ? '启用' : '停用',
+        () => adminTogglePoint(p.id, p.enabled === false, pane), p.enabled !== false));
+      tr.append(acts);
+      return tr;
     });
-    wrap.append(table);
-    pane.replaceChildren(wrap);
+
+    const box = el('div', 'admin-page');
+    box.append(headBar, table);
+    pane.replaceChildren(box);
   } catch (err) {
     console.warn('[湘寻] 后台加载失败：', err.message);
     pane.replaceChildren(emptyBox('加载失败，稍后再试'));
   }
 }
 
-async function patchAdminItem(id, status, pane) {
+/* ---------- 管理后台操作 ---------- */
+async function adminPatchItem(id, status, pane) {
   const r = await api('/items/' + encodeURIComponent(id), { method: 'PATCH', body: { status } });
+  if (!r.ok) return toast(errText(r, '操作失败'));
+  toast(status === 'stored' ? '已确认入库' : '已下架');
+  renderAdminPane('items', pane);
+}
+
+async function adminDecideClaim(id, decision, pane) {
+  const r = await api('/claims/' + encodeURIComponent(id) + '/decision', { method: 'POST', body: { decision } });
+  if (!r.ok) return toast(errText(r, '操作失败'));
+  toast(decision === 'approve' ? '已确认发放' : '已驳回');
+  renderAdminPane('claims', pane);
+}
+
+async function adminSetVolunteer(user, enabled, pane, storagePointIds) {
+  const body = enabled ? { enabled: true, storagePointIds: storagePointIds || [] } : { enabled: false };
+  const r = await api('/admin/users/' + encodeURIComponent(user.id) + '/volunteer', { method: 'POST', body });
+  if (!r.ok) return toast(errText(r, '操作失败'));
+  toast(enabled ? '已设为志愿者' : '已取消志愿者');
+  renderAdminPane('users', pane);
+}
+
+async function adminSetStatus(userId, status, pane) {
+  if (status === 'disabled' && !confirm('停用后该用户会被强制退出所有会话，确定吗？')) return;
+  const r = await api('/admin/users/' + encodeURIComponent(userId) + '/status', { method: 'POST', body: { status } });
+  if (!r.ok) return toast(errText(r, '操作失败'));
+  toast(status === 'disabled' ? '已停用' : '已启用');
+  renderAdminPane('users', pane);
+}
+
+async function adminTogglePoint(id, enabled, pane) {
+  const r = await api('/admin/storage-points/' + encodeURIComponent(id), { method: 'PATCH', body: { enabled } });
+  if (!r.ok) return toast(errText(r, '操作失败'));
+  toast(enabled ? '已启用' : '已停用');
+  renderAdminPane('points', pane);
+}
+
+/* ---------- 后台弹窗 ---------- */
+function adminModal(title, hint, fields, onSubmit) {
+  const mask = el('div', 'modal-mask');
+  const box = el('div', 'modal');
+  box.append(el('h3', null, title));
+  if (hint) box.append(el('p', 'modal-hint', hint));
+
+  const inputs = {};
+  fields.forEach((f) => {
+    const wrap = el('label', 'field');
+    wrap.append(el('span', null, f.label));
+    if (f.type === 'select') {
+      const s = document.createElement('select');
+      s.className = 'input';
+      f.options.forEach(([v, t]) => {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = t; s.append(o);
+      });
+      wrap.append(s);
+      inputs[f.key] = s;
+    } else {
+      const i = document.createElement('input');
+      i.className = 'input';
+      i.type = f.type || 'text';
+      i.placeholder = f.placeholder || '';
+      wrap.append(i);
+      inputs[f.key] = i;
+    }
+    box.append(wrap);
+  });
+
+  const msg = el('p', 'auth-msg');
+  msg.hidden = true;
+  box.append(msg);
+
+  const acts = el('div', 'modal-actions');
+  const cancel = el('button', 'btn btn-ghost', '取消');
+  cancel.type = 'button';
+  const submit = el('button', 'btn', '确定');
+  submit.type = 'button';
+  acts.append(cancel, submit);
+  box.append(acts);
+  mask.append(box);
+  document.body.append(mask);
+
+  const close = () => mask.remove();
+  cancel.addEventListener('click', close);
+  mask.addEventListener('click', (e) => { if (e.target === mask) close(); });
+
+  submit.addEventListener('click', async () => {
+    const data = {};
+    Object.keys(inputs).forEach((k) => { data[k] = inputs[k].value.trim(); });
+    submit.disabled = true;
+    const res = await onSubmit(data);
+    submit.disabled = false;
+    if (res && res.ok === false) {
+      msg.hidden = false;
+      msg.textContent = res.message || '操作失败';
+      return;
+    }
+    close();
+  });
+}
+
+function openVolunteerDialog(user, pane) {
+  const mask = el('div', 'modal-mask');
+  const box = el('div', 'modal');
+  box.append(el('h3', null, '设为志愿者：' + (user.name || user.studentId)));
+  box.append(el('p', 'modal-hint', '选择他能确认入库的存放点（可多选）。'));
+
+  const listBox = el('div', 'vol-list');
+  box.append(listBox);
+
+  const acts = el('div', 'modal-actions');
+  const cancel = el('button', 'btn btn-ghost', '取消');
+  cancel.type = 'button';
+  const submit = el('button', 'btn', '保存');
+  submit.type = 'button';
+  acts.append(cancel, submit);
+  box.append(acts);
+  mask.append(box);
+  document.body.append(mask);
+
+  const close = () => mask.remove();
+  cancel.addEventListener('click', close);
+  mask.addEventListener('click', (e) => { if (e.target === mask) close(); });
+
+  api('/admin/storage-points').then((r) => {
+    const points = r.ok ? (r.data.storagePoints || []) : [];
+    if (!points.length) return listBox.append(el('p', 'modal-hint', '还没有存放点，先去「存放点」页签新增'));
+    points.forEach((p) => {
+      const row = el('label', 'vol-item');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = p.id;
+      row.append(cb, el('span', null, p.name + (p.type === 'security' ? '（保卫处）' : '')));
+      listBox.append(row);
+    });
+  });
+
+  submit.addEventListener('click', async () => {
+    const ids = [...listBox.querySelectorAll('input:checked')].map((c) => c.value);
+    if (!ids.length) { toast('至少选一个存放点'); return; }
+    submit.disabled = true;
+    await adminSetVolunteer(user, true, pane, ids);
+    submit.disabled = false;
+    close();
+  });
+}
+
+function openPointDialog(pane) {
+  adminModal('新增存放点', '「保卫处」类型的存放点可以存贵重物品，普通存放点不行。', [
+    { key: 'name', label: '名称', placeholder: '如：图书馆一楼服务台' },
+    { key: 'type', label: '类型', type: 'select', options: [['normal', '普通'], ['security', '保卫处（可存贵重物品）']] },
+    { key: 'address', label: '地址', placeholder: '如：图书馆一层东侧' },
+    { key: 'hours', label: '营业时间', placeholder: '如：08:00-22:00' },
+    { key: 'contactName', label: '联系人', placeholder: '如：张老师' },
+    { key: 'contactPhone', label: '联系电话', placeholder: '可选' },
+  ], async (data) => {
+    if (!data.name) return { ok: false, message: '名称不能为空' };
+    const r = await api('/admin/storage-points', { method: 'POST', body: data });
+    if (!r.ok) return { ok: false, message: errText(r, '新增失败') };
+    toast('已新增存放点');
+    renderAdminPane('points', pane);
+    return { ok: true };
+  });
+}
+/* ---------- 认领：申请与审核 ---------- */
+function openClaimDialog(item, onDone) {
+  const mask = el('div', 'modal-mask');
+  const box = el('div', 'modal');
+  box.append(el('h3', null, '申请认领'));
+  box.append(el('p', 'modal-hint', '写下 2 项以上只有失主才知道的特征（划痕、贴纸、内容物）。发布者核对通过后，才会向双方开放联系方式。'));
+
+  const ta = document.createElement('textarea');
+  ta.className = 'input area';
+  ta.placeholder = '至少 10 个字，例如：盒盖内侧贴了一张动漫贴纸，右耳塞有轻微磨损';
+  box.append(ta);
+
+  const msg = el('p', 'auth-msg');
+  msg.hidden = true;
+  box.append(msg);
+
+  const actions = el('div', 'modal-actions');
+  const cancel = el('button', 'btn btn-ghost', '取消');
+  cancel.type = 'button';
+  const submit = el('button', 'btn', '提交申请');
+  submit.type = 'button';
+  actions.append(cancel, submit);
+  box.append(actions);
+  mask.append(box);
+  document.body.append(mask);
+  ta.focus();
+
+  const close = () => mask.remove();
+  cancel.addEventListener('click', close);
+  mask.addEventListener('click', (e) => { if (e.target === mask) close(); });
+
+  submit.addEventListener('click', async () => {
+    const note = ta.value.trim();
+    if (note.length < 10) {
+      msg.hidden = false;
+      msg.textContent = '至少写 10 个字，写清特征更容易通过';
+      return;
+    }
+    submit.disabled = true;
+    submit.textContent = '提交中…';
+    const r = await api('/items/' + encodeURIComponent(item.id) + '/claims', { method: 'POST', body: { note } });
+    submit.disabled = false;
+    submit.textContent = '提交申请';
+    if (!r.ok) {
+      msg.hidden = false;
+      msg.textContent = errText(r, '提交失败');
+      return;
+    }
+    close();
+    toast('已提交认领申请，等待核对');
+    if (onDone) onDone();
+  });
+}
+
+async function loadClaimList(itemId, box) {
+  const r = await api('/items/' + encodeURIComponent(itemId) + '/claims');
+  if (!r.ok) { box.replaceChildren(el('p', 'modal-hint', '申请列表加载失败')); return; }
+
+  const data = r.data;
+  const list = data.claims || [];
+  if (!list.length) {
+    box.replaceChildren(el('p', 'modal-hint', '还没有人申请认领'));
+    return;
+  }
+
+  const isReviewer = Boolean(data.canReview);
+  box.replaceChildren();
+
+  list.forEach((c) => {
+    const row = el('div', 'claim-row');
+    const head = el('div', 'claim-head');
+    head.append(el('b', null, c.isMine ? '我的申请' : (c.applicantName || '申请人')));
+    const tone = c.status === 'pending' ? 'sand' : c.status === 'approved' ? 'olive' : 'muted';
+    const text = c.status === 'pending' ? '待处理' : c.status === 'approved' ? '已通过' : '已驳回';
+    head.append(el('span', `status ${tone}`, text));
+    row.append(head);
+    row.append(el('p', 'claim-note', c.note || ''));
+    if (c.reviewNote) row.append(el('p', 'claim-note warn', '处理意见：' + c.reviewNote));
+
+    if (c.status === 'pending' && !c.isMine) {
+      const acts = el('div', 'claim-acts');
+      const agree = el('span', 'admin-act', isReviewer ? '最终通过' : '同意');
+      const reject = el('span', 'admin-act muted', '拒绝');
+      agree.addEventListener('click', () => decideClaim(c.id, isReviewer ? 'approve' : 'agree', itemId));
+      reject.addEventListener('click', () => decideClaim(c.id, 'reject', itemId));
+      acts.append(agree, reject);
+      row.append(acts);
+    } else if (c.publisherVerdict) {
+      row.append(el('p', 'claim-note', '发布者表态：' + (c.publisherVerdict === 'agree' ? '同意' : '拒绝')));
+    }
+
+    box.append(row);
+  });
+}
+
+async function decideClaim(claimId, decision, itemId) {
+  const r = await api('/claims/' + encodeURIComponent(claimId) + '/decision', {
+    method: 'POST',
+    body: { decision },
+  });
   if (!r.ok) {
     toast(errText(r, '操作失败'));
     return;
   }
-  toast(status === 'stored' ? '已确认入库' : '已下架');
-  renderAdminPane('items', pane);
+  toast(decision === 'reject' ? '已拒绝' : '已确认');
+  if (itemId) loadDetail(itemId);
 }
 
 /* ---------- 认领：申请与审核 ---------- */
