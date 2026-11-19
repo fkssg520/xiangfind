@@ -32,8 +32,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/e2e/run.ps1 -Scenarios
 | `plaza` | 广场至少 1 张卡（真实接口） |
 | `detail` | 详情标题非空、属性行 ≥ 5 |
 | `claim` | 可认领的物品，点「申请认领」能弹出表单 |
+| `publish` | 填发布表单提交后跳到详情页、标题带 E2E 标记 |
 | `admin` | 管理员进后台：5 个页签 + KPI 有数 |
 | `forbidden` | 学生进后台被拦（不渲染 KPI） |
+
+## 注意：会造数据
+
+`publish` 场景每次跑都会**真的创建一条招领**（标题带 `E2E` 前缀）。跑完想清理：
+
+```sql
+DELETE FROM items WHERE title LIKE 'E2E %';
+```
+
+演示前建议清理一次，免得广场上出现测试物品。
 
 ## 原理（为什么长这样）
 
