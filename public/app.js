@@ -349,7 +349,25 @@ function buildDetail(item, id) {
     if (cbtn.disabled) return;
     openClaimDialog(item, () => loadDetail(item.id));
   });
-  claim.append(cbtn);
+  // 只在「自己发布的」或「当前可认领的」情况下显示按钮，避免出现禁用的死按钮
+  if (item.isOwner || CLAIMABLE.has(item.status)) claim.append(cbtn);
+
+  // 待领取：只有所属存放点的志愿者或管理员能确认归还
+  if (item.status === 'ready_for_pickup' && item.claim?.canReview) {
+    const done = el('button', 'btn btn-ghost', '确认已归还');
+    done.type = 'button';
+    done.style.marginTop = '10px';
+    done.addEventListener('click', async () => {
+      if (!confirm('确认这件物品已经交还给失主？确认后状态变为「已归还」。')) return;
+      done.disabled = true;
+      const r = await api('/items/' + encodeURIComponent(item.id) + '/return', { method: 'POST' });
+      done.disabled = false;
+      if (!r.ok) { toast(errText(r, '操作失败')); return; }
+      toast('已标记归还');
+      loadDetail(item.id);
+    });
+    claim.append(done);
+  }
   side.append(claim);
 
   if (item.isOwner || item.claim?.canReview) {
