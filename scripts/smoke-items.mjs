@@ -161,5 +161,17 @@ check('GET /api/claims/mine 200', myClaims.status === 200 && Array.isArray(myCla
 const anonClaims = await call('GET', '/api/claims/mine', null, false);
 check('匿名访问我的认领 401', anonClaims.status === 401 || anonClaims.status === 403, `实际 ${anonClaims.status}`);
 
+// 16. 我的收藏（fav=1）
+const favListBefore = await call('GET', '/api/items?fav=1&pageSize=50');
+check('fav=1 返回 200', favListBefore.status === 200);
+const favCountBefore = (favListBefore.data?.items || []).length;
+await call('POST', `/api/items/${itemId}/favorite`);   // 收藏回来
+const favListAfter = await call('GET', '/api/items?fav=1&pageSize=50');
+check('收藏后 fav=1 能查到', (favListAfter.data?.items || []).some((i) => i.id === itemId),
+  `之前 ${favCountBefore} 条 → 现在 ${(favListAfter.data?.items || []).length} 条`);
+check('fav=1 的项都标记为已收藏', (favListAfter.data?.items || []).every((i) => i.isFavorited === true));
+const anonFav = await call('GET', '/api/items?fav=1', null, false);
+check('匿名 fav=1 返回空并标记需登录', anonFav.status === 200 && anonFav.data?.requiresLogin === true);
+
 console.log(`\n结果：通过 ${pass}，失败 ${fail}`);
 process.exit(fail === 0 ? 0 : 1);

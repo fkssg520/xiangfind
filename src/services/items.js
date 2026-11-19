@@ -63,6 +63,13 @@ export function listItems(db, { viewer, query }) {
     params.push(viewer.id);
   }
 
+  // fav=1：只看我收藏的（个人中心「我的收藏」）
+  if (query.fav === '1' || query.fav === 'true') {
+    if (!viewer) return { items: [], total: 0, page: 1, pageSize: 20, requiresLogin: true };
+    where.push('i.id IN (SELECT item_id FROM favorites WHERE user_id = ?)');
+    params.push(viewer.id);
+  }
+
   const type = query.type;
   if (type && (type === 'lost' || type === 'found')) { where.push('i.type = ?'); params.push(type); }
 
