@@ -54,9 +54,16 @@ export async function sendMail({ to, subject, text, html }) {
   }
 }
 
-export async function sendVerificationCode(email, code, purpose = 'verify') {
+// 验证码邮件正文（抽出来便于单元测试；PUBLIC_BASE_URL 决定是否带站点链接）
+export function buildVerificationText(code, purpose = 'verify') {
   const title = purpose === 'reset' ? '重设密码验证码' : '邮箱验证码';
-  const text = `你的${title}是 ${code}，15 分钟内有效。如非本人操作请忽略本邮件。`;
+  const base = String(process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
+  const link = /^https?:\/\//.test(base) ? `\n\n访问湘寻：${base}` : '';
+  return { title, text: `你的${title}是 ${code}，15 分钟内有效。如非本人操作请忽略本邮件。${link}` };
+}
+
+export async function sendVerificationCode(email, code, purpose = 'verify') {
+  const { title, text } = buildVerificationText(code, purpose);
 
   if (!isSmtpConfigured()) {
     console.log(`[mail:dev] to=${email} code=${code} purpose=${purpose}（未配置 SMTP，仅打日志）`);
