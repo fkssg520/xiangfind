@@ -59,6 +59,8 @@ function renderRoute() {
   });
 
   if (name === 'item') loadDetail(param);
+  if (name === 'me') loadMe();
+  if (name === 'messages') loadMessages();
 
   window.scrollTo(0, 0);
 }
@@ -275,7 +277,7 @@ bindPlaza();
 bindAuth();
 bindPublish();
 refreshMe();
-setUnread(3); // mock：等 /api/messages 就绪后改为真实 unreadCount
+loadUnread(); // mock 未读数；等 /api/messages 就绪后换真实接口
 renderCategories();
 resetAndLoad();
 
@@ -643,4 +645,230 @@ function bindPublish() {
 
   refreshType();
   refreshPoints();
+}
+
+/* ---------- 我的中心 ---------- */
+const ROLE_TEXT = { student: '学生', volunteer: '志愿者', admin: '管理员', security: '保卫处' };
+const CLAIM_TEXT = {
+  pending: ['待审核', 'sand'],
+  approved: ['已通过', 'olive'],
+  rejected: ['已驳回', 'muted'],
+};
+
+function emptyBox(text) {
+  return el('div', 'empty', text);
+}
+
+async function loadMe() {
+  const root = document.getElementById('me-root');
+  if (!root) return;
+  root.replaceChildren(el('div', 'skeleton'));
+
+  const meRes = await api('/me');
+  if (!meRes.ok) {
+    root.replaceChildren(emptyBox('请先登录后再查看「我的」'));
+    toast('请先登录');
+    location.hash = '#/login';
+    return;
+  }
+  const user = meRes.data.user;
+
+  const page = el('div', 'me-page');
+
+  const head = el('div', 'card me-head');
+  head.append(el('div', 'me-avatar', (user.name || '?').slice(-1)));
+  const info = el('div', 'me-info');
+  info.append(el('b', null, user.name || user.studentId));
+  info.append(el('span', 'me-meta',
+    `${user.studentId} · ${ROLE_TEXT[user.role] || user.role}${user.isVolunteer ? ' · 志愿者' : ''}`));
+  head.append(info);
+
+  const logout = el('button', 'btn btn-ghost btn-sm', '退出登录');
+  logout.type = 'button';
+  logout.addEventListener('click', async () => {
+    await api('/auth/logout', { method: 'POST' });
+    currentUser = null;
+    renderUser();
+    toast('已退出');
+    location.hash = '#/plaza';
+  });
+  head.append(logout);
+  page.append(head);
+
+  const tabs = el('div', 'seg me-tabs');
+  const pane = el('div', 'me-pane');
+  const TAB_DEFS = [
+    ['posts', '我的发布'],
+    ['claims', '我的认领'],
+    ['favs', '我的收藏'],
+  ];
+
+  const show = (key) => {
+    [...tabs.children].forEach((b) => b.classList.toggle('on', b.dataset.tab === key));
+    pane.replaceChildren(el('div', 'skeleton'));
+    renderPane(key, pane);
+  };
+
+  TAB_DEFS.forEach(([key, label], i) => {
+    const b = el('button', i === 0 ? 'on' : '', label);
+    b.type = 'button';
+    b.dataset.tab = key;
+    b.addEventListener('click', () => show(key));
+    tabs.append(b);
+  });
+
+  page.append(tabs, pane);
+  root.replaceChildren(page);
+  show('posts');
+}
+
+async function renderPane(key, pane) {
+  try {
+    if (key === 'posts') {
+      const res = await fetch('/mock/me-posts.json');
+      const data = await res.json();
+      if (!data.items.length) return pane.replaceChildren(emptyBox('还没有发布过信息'));
+      const list = el('div', 'me-list');
+      data.items.forEach((it) => {
+        const row = el('div', 'me-row');
+        row.append(el('span', `type-tag ${it.type}`, it.type === 'lost' ? '失' : '招'));
+        const main = el('div', 'me-row-main');
+        main.append(el('b', null, it.title));
+        main.append(el('span', 'me-meta', `${it.location} · ${fmtTime(it.createdAt)}`));
+        row.append(main);
+        const table = STATUS_MAP[it.type] || {};
+        const [label, tone] = table[it.status] || [it.status, 'muted'];
+        row.append(el('span', `status ${tone}`, label));
+        row.addEventListener('click', () => { location.hash = `#/item/${it.id}`; });
+        list.append(row);
+      });
+      pane.replaceChildren(list);
+      return;
+    }
+
+    if (key === 'claims') {
+      const res = await fetch('/mock/claims.json');
+      const data = await res.json();
+      if (!data.claims.length) return pane.replaceChildren(emptyBox('还没有提交过认领'));
+      const list = el('div', 'me-list');
+      data.claims.forEach((c) => {
+        const row = el('div', 'me-row');
+        const main = el('div', 'me-row-main');
+        main.append(el('b', null, c.itemTitle));
+        main.append(el('span', 'me-meta', c.note));
+        if (c.reviewNote) main.append(el('span', 'me-meta warn', c.reviewNote));
+        row.append(main);
+        const [label, tone] = CLAIM_TEXT[c.status] || [c.status, 'muted'];
+        row.append(el('span', `status ${tone}`, label));
+        list.append(row);
+      });
+      pane.replaceChildren(list);
+      return;
+    }
+
+    const res = await fetch('/mock/items.json');
+    const data = await res.json();
+    const favs = (data.items || []).filter((i) => i.isFavorited);
+    if (!favs.length) return pane.replaceChildren(emptyBox('还没有收藏任何信息'));
+    const grid = el('div', 'grid');
+    favs.forEach((it) => grid.append(cardOf(it)));
+    pane.replaceChildren(grid);
+  } catch (err) {
+    pane.replaceChildren(emptyBox('加载失败，稍后再试'));
+    console.warn('[湘寻] 我的中心加载失败：', err.message);
+  }
+}
+
+/* ---------- 消息中心 ---------- */
+const MSG_TEXT = { match: '匹配', claim: '认领', system: '系统' };
+
+async function loadMessages() {
+  const root = document.getElementById('messages-root');
+  if (!root) return;
+  root.replaceChildren(el('div', 'skeleton'));
+
+  const meRes = await api('/me');
+  if (!meRes.ok) {
+    root.replaceChildren(emptyBox('请先登录后再查看消息'));
+    location.hash = '#/login';
+    return;
+  }
+
+  let data;
+  try {
+    const res = await fetch('/mock/messages.json');
+    data = await res.json();
+  } catch {
+    root.replaceChildren(emptyBox('消息加载失败'));
+    return;
+  }
+
+  const page = el('div', 'msg-page');
+  let filter = 'all';
+
+  const bar = el('div', 'msg-bar');
+  const seg = el('div', 'seg');
+  const pane = el('div', 'msg-list');
+
+  const paint = () => {
+    const list = filter === 'unread' ? data.messages.filter((m) => !m.readAt) : data.messages;
+    pane.replaceChildren();
+    if (!list.length) {
+      pane.append(emptyBox(filter === 'unread' ? '没有未读消息' : '还没有消息'));
+      return;
+    }
+    list.forEach((m) => {
+      const row = el('div', `msg-row${m.readAt ? '' : ' unread'}`);
+      row.append(el('span', `msg-dot ${MSG_TEXT[m.type] ? m.type : 'system'}`, MSG_TEXT[m.type] || '消息'));
+      const main = el('div', 'msg-main');
+      main.append(el('b', null, m.title));
+      main.append(el('span', 'msg-body', m.body));
+      main.append(el('span', 'me-meta', fmtTime(m.createdAt)));
+      row.append(main);
+      if (!m.readAt) row.append(el('span', 'msg-badge', '未读'));
+      row.addEventListener('click', () => {
+        m.readAt = m.readAt || new Date().toISOString();
+        setUnread(data.messages.filter((x) => !x.readAt).length);
+        if (m.relatedId) location.hash = `#/item/${m.relatedId}`;
+        else paint();
+      });
+      pane.append(row);
+    });
+    setUnread(data.messages.filter((x) => !x.readAt).length);
+  };
+
+  [['all', '全部'], ['unread', '未读']].forEach(([k, label], i) => {
+    const b = el('button', i === 0 ? 'on' : '', label);
+    b.type = 'button';
+    b.addEventListener('click', () => {
+      filter = k;
+      [...seg.children].forEach((x) => x.classList.toggle('on', x === b));
+      paint();
+    });
+    seg.append(b);
+  });
+
+  const markAll = el('button', 'btn btn-ghost btn-sm', '全部标为已读');
+  markAll.type = 'button';
+  markAll.addEventListener('click', () => {
+    const now = new Date().toISOString();
+    data.messages.forEach((m) => { m.readAt = m.readAt || now; });
+    paint();
+    toast('已全部标为已读');
+  });
+
+  bar.append(seg, markAll);
+  page.append(bar, pane);
+  root.replaceChildren(page);
+  paint();
+}
+
+async function loadUnread() {
+  try {
+    const res = await fetch('/mock/messages.json');
+    const data = await res.json();
+    setUnread(Number(data.unreadCount) || 0);
+  } catch {
+    setUnread(0);
+  }
 }
