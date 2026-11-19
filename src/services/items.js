@@ -1,7 +1,7 @@
 // 物品服务：列表、详情、发布、编辑、收藏
 // 契约：docs/API契约.md §2-§4；状态机：D-001；通知去重：D-004
 import { nowIso, ID } from '../lib/id.js';
-import { attachImages } from './uploads.js';
+import { attachImages, assertImagesExist } from './uploads.js';
 
 export const CATEGORIES = ['证件', '电子产品', '钥匙', '书籍', '衣物', '其他'];
 
@@ -255,24 +255,34 @@ export function createItem(db, { viewer, body }) {
   // D-001：招领从"待存放"开始，失物从"进行中"开始
   const status = data.type === 'found' ? 'pending_storage' : 'open';
 
-  db.prepare(
-    `INSERT INTO items (id, user_id, type, title, category, description, event_at, location,
-                        value_level, storage_point_id, status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    id, viewer.id, data.type, data.title, data.category, data.description, data.eventAt,
-    data.location, data.valueLevel, data.storagePointId, status, now, now
-  );
+  // 先校验图片，再写库：避免"物品插入了、图片校验失败"留下无图孤儿记录
+  const images = Array.isArray(body.images) ? body.images : [];
+  if (images.length) {
+    const check = assertImagesExist(images);
+    if (check.error) {
+      return { status: 400, body: { error: check.error } };
+    }
+  }
 
-  // 图片（可选）：先上传拿到 fileName，再随发布一起挂上
-  if (Array.isArray(body.images) && body.images.length) {
-    if (body.images.length > 3) {
-      return { status: 400, body: { error: { code: 'too_many', message: '最多 3 张图片' } } };
+  db.exec('BEGIN');
+  try {
+    db.prepare(
+      `INSERT INTO items (id, user_id, type, title, category, description, event_at, location,
+                          value_level, storage_point_id, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      id, viewer.id, data.type, data.title, data.category, data.description, data.eventAt,
+      data.location, data.valueLevel, data.storagePointId, status, now, now
+    );
+
+    if (images.length) {
+      const attached = attachImages(db, id, images, () => ID.image());
+      if (attached.error) throw new Error(attached.error.message);
     }
-    const attached = attachImages(db, id, body.images, () => ID.image());
-    if (attached.error) {
-      return { status: 400, body: { error: attached.error } };
-    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    return { status: 400, body: { error: { code: 'image_failed', message: `图片处理失败：${err.message}` } } };
   }
 
   return { status: 201, body: { item: getItem(db, id, viewer) } };
