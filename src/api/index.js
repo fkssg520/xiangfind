@@ -3,6 +3,7 @@ import { json, fail, readJson, addCookie, clearCookie, clientIp } from '../lib/h
 import { Readable } from 'node:stream';
 import { saveUpload, MAX_FILES } from '../services/uploads.js';
 import { hit } from '../lib/ratelimit.js';
+import { submitClaim, decideClaim, confirmReturn, listClaims } from '../services/claims.js';
 import { verifyCsrf } from '../lib/csrf.js';
 import {
   SESSION_COOKIE, SESSION_TTL_MS, createSession, destroySession, getSessionUser,
@@ -239,6 +240,42 @@ export async function handleApi(req, res, ctx) {
   if (favMatch && req.method === 'POST') {
     if (!requireUser(res, viewer)) return true;
     const out = toggleFavorite(db, favMatch[1], viewer);
+    json(res, out.status, out.body);
+    return true;
+  }
+
+  // ---------- 认领 ----------
+  // POST /api/items/:id/claims
+  const claimSubmitMatch = path.match(/^\/api\/items\/([A-Za-z0-9_-]+)\/claims$/);
+  if (claimSubmitMatch && req.method === 'POST') {
+    if (!requireUser(res, viewer)) return true;
+    const out = submitClaim(db, claimSubmitMatch[1], viewer, body);
+    json(res, out.status, out.body);
+    return true;
+  }
+
+  // GET /api/items/:id/claims
+  if (claimSubmitMatch && req.method === 'GET') {
+    if (!requireUser(res, viewer)) return true;
+    const out = listClaims(db, claimSubmitMatch[1], viewer);
+    json(res, out.status, out.body);
+    return true;
+  }
+
+  // POST /api/claims/:id/decision
+  const decisionMatch = path.match(/^\/api\/claims\/([A-Za-z0-9_-]+)\/decision$/);
+  if (decisionMatch && req.method === 'POST') {
+    if (!requireUser(res, viewer)) return true;
+    const out = decideClaim(db, decisionMatch[1], viewer, body);
+    json(res, out.status, out.body);
+    return true;
+  }
+
+  // POST /api/items/:id/return
+  const returnMatch = path.match(/^\/api\/items\/([A-Za-z0-9_-]+)\/return$/);
+  if (returnMatch && req.method === 'POST') {
+    if (!requireUser(res, viewer)) return true;
+    const out = confirmReturn(db, returnMatch[1], viewer);
     json(res, out.status, out.body);
     return true;
   }
