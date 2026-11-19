@@ -61,7 +61,8 @@ npm run dev                          # 或 npm start
 | `npm run db:migrate` | 建表 + 补列（可重复执行） |
 | `npm run db:seed` | 演示数据（幂等） |
 | `npm test` | 单元测试（`node --test`） |
-| `scripts\smoke-all.ps1` | **7 个套件 / 147 项集成冒烟**，每个套件独立库与端口 |
+| `scripts\smoke-all.ps1` | **12 个套件 / 203 项集成冒烟**，每个套件独立库与端口 |
+| `scripts\smoke-e2e.ps1` | **一键浏览器 E2E**（本机 Edge 无头，6 场景；需普通终端，受限环境跑不了） |
 | `scripts\push.ps1` | 一键推送（自动处理本机 SSH 走 443） |
 | `scripts\backup.ps1` | 备份数据库与上传目录（保留 7 日 + 4 周） |
 
