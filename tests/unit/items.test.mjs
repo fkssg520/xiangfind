@@ -22,8 +22,9 @@ function freshDb() {
   return db;
 }
 
-const viewerA = { id: 'usr_a', role: 'student', name: '甲' };
-const viewerB = { id: 'usr_b', role: 'volunteer', name: '乙' };
+// 与真实 getSessionUser 返回的形状一致（含 email_verified_at）
+const viewerA = { id: 'usr_a', role: 'student', name: '甲', email_verified_at: '2026-11-01T00:00:00.000Z' };
+const viewerB = { id: 'usr_b', role: 'volunteer', name: '乙', email_verified_at: '2026-11-01T00:00:00.000Z' };
 
 const baseFound = {
   type: 'found', title: '黑色雨伞', category: '其他',
@@ -144,6 +145,20 @@ test('入库后关键字段锁定，管理员可改', () => {
 
   const adminEdit = patchItem(db, created.body.item.id, { viewer: { id: 'usr_a', role: 'admin' }, body: { title: '管理员改的' } });
   assert.equal(adminEdit.status, 200);
+});
+
+test('未验证邮箱不能发布（必测场景 2）', () => {
+  const db = freshDb();
+  db.prepare("UPDATE users SET email_verified_at = NULL WHERE id = 'usr_a'").run();
+  const out = createItem(db, { viewer: { id: 'usr_a', role: 'student', email_verified_at: null }, body: baseFound });
+  assert.equal(out.status, 403);
+  assert.equal(out.body.error.code, 'email_unverified');
+});
+
+test('验证后可以发布', () => {
+  const db = freshDb();
+  const out = createItem(db, { viewer: viewerA, body: baseFound });
+  assert.equal(out.status, 201);
 });
 
 test('详情：他人看不到联系方式，认领通过后才可见', () => {

@@ -246,6 +246,11 @@ function validateCreate(db, body) {
 }
 
 export function createItem(db, { viewer, body }) {
+  // 需求基线 §2.2 / 必测场景 2：未验证邮箱不能发布
+  if (viewer && !viewer.email_verified_at && !viewer.emailVerified) {
+    return { status: 403, body: { error: { code: 'email_unverified', message: '请先完成邮箱验证再发布' } } };
+  }
+
   const { errors, data } = validateCreate(db, body);
   if (errors.length) {
     return { status: 400, body: { error: { code: errors[0][0], message: errors[0][1], details: errors } } };
