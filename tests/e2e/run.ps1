@@ -13,6 +13,9 @@ param(
     [string[]]$Scenarios = @('login', 'plaza', 'detail', 'claim', 'admin', 'forbidden')
 )
 
+# -File 方式传参时 "a,b" 是单个字符串，这里拆成数组
+$Scenarios = @($Scenarios | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
+
 $ErrorActionPreference = 'Continue'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $root = Split-Path -Parent (Split-Path -Parent $here)
@@ -38,7 +41,9 @@ $fail = 0
 Write-Host "E2E base = $base"
 try {
     foreach ($name in $Scenarios) {
-        $url = "$base/__e2e-harness.html?scenario=$name"
+        # base 要一起传：harness 里的 iframe 才知道连哪个端口
+        $encBase = [System.Uri]::EscapeDataString($base)
+        $url = "$base/__e2e-harness.html?scenario=$name&base=$encBase"
         $dump = Join-Path $env:TEMP "e2e-$name-$PID.html"
         Remove-Item $dump -ErrorAction SilentlyContinue
 
