@@ -59,7 +59,7 @@ function renderRoute() {
   });
 
   if (name === 'item') loadDetail(param);
-  if (name === 'me') loadMe();
+  if (name === 'me') loadMe(param);
   if (name === 'messages') loadMessages();
 
   window.scrollTo(0, 0);
@@ -659,7 +659,7 @@ function emptyBox(text) {
   return el('div', 'empty', text);
 }
 
-async function loadMe() {
+async function loadMe(tab) {
   const root = document.getElementById('me-root');
   if (!root) return;
   root.replaceChildren(el('div', 'skeleton'));
@@ -719,14 +719,16 @@ async function loadMe() {
 
   page.append(tabs, pane);
   root.replaceChildren(page);
-  show('posts');
+  const first = ['posts', 'claims', 'favs'].includes(tab) ? tab : 'posts';
+  show(first);
 }
 
 async function renderPane(key, pane) {
   try {
     if (key === 'posts') {
-      const res = await fetch('/mock/me-posts.json');
-      const data = await res.json();
+      const r = await api('/items?mine=1&pageSize=50');
+      if (!r.ok) return pane.replaceChildren(emptyBox('请先登录后查看我的发布'));
+      const data = r.data;
       if (!data.items.length) return pane.replaceChildren(emptyBox('还没有发布过信息'));
       const list = el('div', 'me-list');
       data.items.forEach((it) => {
@@ -747,8 +749,9 @@ async function renderPane(key, pane) {
     }
 
     if (key === 'claims') {
-      const res = await fetch('/mock/claims.json');
-      const data = await res.json();
+      const r = await api('/claims/mine');
+      if (!r.ok) return pane.replaceChildren(emptyBox('请先登录后查看我的认领'));
+      const data = r.data;
       if (!data.claims.length) return pane.replaceChildren(emptyBox('还没有提交过认领'));
       const list = el('div', 'me-list');
       data.claims.forEach((c) => {
@@ -796,8 +799,12 @@ async function loadMessages() {
 
   let data;
   try {
-    const res = await fetch('/mock/messages.json');
-    data = await res.json();
+    const r = await api('/messages');
+    if (!r.ok) {
+      root.replaceChildren(emptyBox('请先登录后再查看消息'));
+      return;
+    }
+    data = r.data;
   } catch {
     root.replaceChildren(emptyBox('消息加载失败'));
     return;
@@ -827,7 +834,9 @@ async function loadMessages() {
       row.append(main);
       if (!m.readAt) row.append(el('span', 'msg-badge', '未读'));
       row.addEventListener('click', () => {
+        const wasUnread = !m.readAt;
         m.readAt = m.readAt || new Date().toISOString();
+        if (wasUnread && m.id) api('/messages/' + m.id + '/read', { method: 'POST' }).catch(() => {});
         setUnread(data.messages.filter((x) => !x.readAt).length);
         if (m.relatedId) location.hash = `#/item/${m.relatedId}`;
         else paint();
@@ -852,7 +861,10 @@ async function loadMessages() {
   markAll.type = 'button';
   markAll.addEventListener('click', () => {
     const now = new Date().toISOString();
-    data.messages.forEach((m) => { m.readAt = m.readAt || now; });
+    data.messages.forEach((m) => {
+      if (!m.readAt && m.id) api('/messages/' + m.id + '/read', { method: 'POST' }).catch(() => {});
+      m.readAt = m.readAt || now;
+    });
     paint();
     toast('已全部标为已读');
   });
@@ -865,9 +877,8 @@ async function loadMessages() {
 
 async function loadUnread() {
   try {
-    const res = await fetch('/mock/messages.json');
-    const data = await res.json();
-    setUnread(Number(data.unreadCount) || 0);
+    const r = await api('/messages');
+    setUnread(r.ok ? (Number(r.data.unreadCount) || 0) : 0);
   } catch {
     setUnread(0);
   }
