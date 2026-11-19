@@ -133,12 +133,27 @@ check('详情返回 2 张图', created.data?.item?.images?.length === 2, JSON.st
 const imgRes = await fetch(BASE + png.url);
 check('图片可通过 /uploads 访问', imgRes.status === 200, `content-type=${imgRes.headers.get('content-type')}`);
 
-// 10. 引用不存在的图片
+// 10. 引用不存在的图片（不能留下脏数据）
 const bad = await call('POST', '/api/items', {
   type: 'lost', title: '坏图帖', category: '其他',
   description: '引用了不存在的图片名，应该被拒。', location: '测试地点', images: ['not-exist.png'],
 });
 check('引用不存在的图片被拒 400', bad.status === 400, bad.data?.error?.message);
+
+// 关键：失败的发布不能留下孤儿记录（小冯报的 bug）
+const orphan = await call('GET', '/api/items?q=坏图帖');
+check('被拒后没有留下孤儿物品', (orphan.data?.items || []).length === 0,
+  `查到 ${(orphan.data?.items || []).length} 条`);
+
+// 11. 超过 3 张图（发布时）
+const many = await call('POST', '/api/items', {
+  type: 'lost', title: '四图帖', category: '其他',
+  description: '一次挂四张图，应该被拒。', location: '测试地点',
+  images: [png.fileName, jpg.fileName, png.fileName, jpg.fileName],
+});
+check('发布时超过 3 张图被拒 400', many.status === 400, many.data?.error?.message);
+const orphan2 = await call('GET', '/api/items?q=四图帖');
+check('超量被拒后也没留孤儿物品', (orphan2.data?.items || []).length === 0);
 
 console.log(`\n结果：通过 ${pass}，失败 ${fail}`);
 process.exit(fail === 0 ? 0 : 1);

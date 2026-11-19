@@ -73,6 +73,21 @@ export function saveUpload(buffer, declaredName = '') {
   return { fileName, mimeType: type.mime, size: buffer.length };
 }
 
+// 预校验：在插入物品之前就确认图片都存在，避免留下"无图孤儿记录"
+export function assertImagesExist(fileNames) {
+  const list = Array.isArray(fileNames) ? fileNames : [];
+  if (list.length > MAX_PER_ITEM) {
+    return { error: { code: 'too_many', message: `最多 ${MAX_PER_ITEM} 张图片` } };
+  }
+  for (const name of list) {
+    const safe = String(name).replace(/[^A-Za-z0-9._-]/g, '');
+    if (!safe || !existsSync(join(UPLOAD_DIR, safe))) {
+      return { error: { code: 'image_missing', message: `图片不存在：${safe || name}` } };
+    }
+  }
+  return { ok: true };
+}
+
 // 把已上传的文件挂到物品上（创建/编辑物品时调用）
 export function attachImages(db, itemId, fileNames, idFactory) {
   const list = Array.isArray(fileNames) ? fileNames.slice(0, MAX_PER_ITEM) : [];
