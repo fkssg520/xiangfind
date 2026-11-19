@@ -140,9 +140,12 @@ await newSession(otherEmail, '2077' + stamp);
 const otherEdit = await call('PATCH', `/api/items/${itemId}`, { title: '被别人改了' });
 check('他人编辑被拒 403', otherEdit.status === 403, otherEdit.data?.error?.message);
 
-// 13. 未登录访问
+// 13. 未登录访问（D-012：列表对游客只读开放）
 const anon = await call('GET', '/api/items', null, false);
-check('未登录访问列表 401', anon.status === 401);
+check('未登录可读列表 200（D-012）', anon.status === 200);
+check('匿名列表不含联系方式', (anon.data?.items || []).every((i) => !('contact' in i)));
+const anonWrite = await call('POST', '/api/items', { type: 'lost', title: 'x', category: '其他', description: 'x', location: 'x' }, false);
+check('未登录写操作被拒（403/401）', anonWrite.status === 403 || anonWrite.status === 401, `实际 ${anonWrite.status}`);
 
 console.log(`\n结果：通过 ${pass}，失败 ${fail}`);
 process.exit(fail === 0 ? 0 : 1);
