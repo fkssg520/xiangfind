@@ -4,6 +4,13 @@
 // 切换真实接口时只改 API_PREFIX，不改字段映射。
 
 let currentUser = null; // 当前登录用户（null = 未登录）
+
+// 存放点目前没有列表接口，先用与 seed 一致的常量；等 GET /api/storage-points 就绪后替换
+const STORAGE_POINTS = [
+  { id: 'stp_demo_lib', name: '图书馆一楼服务台', type: 'normal' },
+  { id: 'stp_demo_dorm', name: '宿舍服务中心', type: 'normal' },
+  { id: 'stp_demo_guard', name: '保卫处失物招领点', type: 'security' },
+];
 const API_PREFIX = ''; // 例：'' = 同源；'/api' = 后端前缀。mock 阶段留空。
 const MOCK = {
   items: 'mock/items.json',
@@ -224,6 +231,7 @@ function bindPlaza() {
 renderRoute();
 bindPlaza();
 bindAuth();
+bindPublish();
 refreshMe();
 setUnread(3); // mock：等 /api/messages 就绪后改为真实 unreadCount
 loadItems();
@@ -507,4 +515,89 @@ function bindAuth() {
     if (box) box.textContent = pendingEmail;
     showAuthForm('verify');
   }
+}
+
+/* ---------- 发布页 ---------- */
+
+function bindPublish() {
+  const form = document.getElementById('form-publish');
+  if (!form) return;
+
+  let type = 'lost';
+  const storageWrap = document.getElementById('pub-storage-wrap');
+  const storageSel = form.elements.storagePointId;
+  const valueSel = form.elements.valueLevel;
+  const msg = document.getElementById('pub-msg');
+
+  function refreshPoints() {
+    const valuable = valueSel.value === 'valuable';
+    const list = STORAGE_POINTS.filter((p) => !valuable || p.type === 'security');
+    storageSel.replaceChildren();
+    list.forEach((p) => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name;
+      storageSel.append(opt);
+    });
+  }
+
+  function refreshType() {
+    document.querySelectorAll('#pub-type button').forEach((b) => {
+      b.classList.toggle('on', b.dataset.type === type);
+    });
+    storageWrap.hidden = type !== 'found';
+  }
+
+  document.getElementById('pub-type')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-type]');
+    if (!btn) return;
+    type = btn.dataset.type;
+    refreshType();
+  });
+
+  valueSel.addEventListener('change', refreshPoints);
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    msg.hidden = true;
+
+    const btn = form.querySelector('button[type=submit]');
+    busy(btn, true, '提交中…');
+
+    const body = {
+      type,
+      title: form.elements.title.value.trim(),
+      category: form.elements.category.value,
+      description: form.elements.description.value.trim(),
+      location: form.elements.location.value.trim(),
+      eventAt: form.elements.eventAt.value ? new Date(form.elements.eventAt.value).toISOString() : null,
+      valueLevel: form.elements.valueLevel.value,
+      storagePointId: type === 'found' ? form.elements.storagePointId.value : null,
+    };
+
+    const r = await api('/items', { method: 'POST', body });
+    busy(btn, false);
+
+    if (r.status === 401) {
+      toast('请先登录');
+      location.hash = '#/login';
+      return;
+    }
+    if (!r.ok) {
+      msg.hidden = false;
+      msg.textContent = errText(r, '提交失败，检查一下必填项');
+      return;
+    }
+
+    toast('已提交，等待审核');
+    const id = r.data?.item?.id;
+    form.reset();
+    type = 'lost';
+    refreshType();
+    refreshPoints();
+    location.hash = id ? `#/item/${id}` : '#/plaza';
+  });
+
+  refreshType();
+  refreshPoints();
 }

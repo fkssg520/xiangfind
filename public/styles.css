@@ -44,6 +44,9 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* [hidden] 必须真的隐藏：类选择器上的 display 会盖掉它 */
+[hidden] { display: none !important; }
+
 html { scroll-behavior: smooth; }
 
 body {
@@ -380,3 +383,24 @@ main { max-width: var(--page-max); margin: 0 auto; padding: var(--s-32) var(--s-
   font-family: inherit; font-size: 13px; color: var(--color-terracotta);
 }
 .auth-link:hover { text-decoration: underline; }
+
+/* ---------- 发布页 ---------- */
+.publish-form { max-width: 720px; padding: var(--s-32); display: flex; flex-direction: column; gap: var(--s-16); }
+.publish-form .seg { margin-bottom: var(--s-8); }
+.publish-form .field { margin-bottom: 0; }
+.publish-form label span i { color: var(--color-terracotta); font-style: normal; }
+.publish-form .input { flex: none; width: 100%; height: 44px; }
+.publish-form .input.area {
+  height: 128px; padding: 12px 16px; line-height: 1.75;
+  font-family: var(--font-serif); resize: vertical;
+}
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-16); }
+.pub-actions { display: flex; align-items: center; gap: var(--s-16); margin-top: var(--s-8); }
+.pub-hint { font-size: 12.5px; color: var(--color-earth-brown); opacity: .78; }
+
+@media (max-width: 760px) {
+  .publish-form { padding: var(--s-16); }
+  .grid-2 { grid-template-columns: 1fr; }
+  .pub-actions { flex-direction: column; align-items: stretch; }
+  .pub-hint { text-align: center; }
+}
