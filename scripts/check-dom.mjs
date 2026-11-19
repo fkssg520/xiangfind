@@ -3,6 +3,7 @@
 // 用法：node scripts/check-dom.mjs [publicDir]
 import { readFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { Script } from 'node:vm';
 
 const PUBLIC = resolve(process.argv[2] || './public');
 const htmlPath = join(PUBLIC, 'index.html');
@@ -22,6 +23,33 @@ ok('文件齐全');
 
 const html = readFileSync(htmlPath, 'utf8');
 const js = readFileSync(jsPath, 'utf8');
+
+// 0) 语法检查：2026-11-19 一次重复声明让全站 JS 静默失效（页面骨架正常但所有交互死）
+//    vm.Script 在进程内解析，不需要 spawn（沙箱里 Node 不能起子进程）
+try {
+  new Script(js, { filename: 'public/app.js' });
+  ok('app.js 语法通过');
+} catch (err) {
+  bad('app.js 语法错误（会让全站交互失效）', err.message);
+}
+
+// 0.1) 顶层重复声明：function 重复是合法 JS 但几乎总是合并事故
+const topLevelNames = new Map();
+for (const m of js.matchAll(/^(?:function|const|let|var)\s+([A-Za-z_$][\w$]*)/gm)) {
+  const name = m[1];
+  topLevelNames.set(name, (topLevelNames.get(name) || 0) + 1);
+}
+// const/let/var 同名会直接语法错误，能走到这里的只有 function 重复
+const dups = [...topLevelNames.entries()].filter(([, n]) => n > 1).map(([n, c]) => `${n}×${c}`);
+if (dups.length === 0) ok('没有顶层重复声明', `${topLevelNames.size} 个顶层标识符`);
+else bad('发现顶层重复声明（多半是合并事故）', dups.join(', '));
+
+// 0.2) 冲突标记残留：合并冲突没解干净
+if (/^(<<<<<<<|=======|>>>>>>>)/m.test(js) || /^(<<<<<<<|=======|>>>>>>>)/m.test(html)) {
+  bad('文件里有冲突标记残留');
+} else {
+  ok('没有冲突标记残留');
+}
 
 // 1) 收集 html 里定义的 id
 const htmlIds = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
