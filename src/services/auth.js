@@ -43,7 +43,9 @@ export async function register(db, body, ip) {
   const { errors, data } = validateRegister(body);
   if (errors.length) return { status: 400, body: { error: { code: errors[0][0], message: errors[0][1], details: errors } } };
 
-  const limited = hit(`register:${ip}`, 5, 60 * 60 * 1000);
+  // 生产默认 5 次/小时；测试可用 REGISTER_LIMIT_PER_HOUR 调高
+  const REGISTER_LIMIT = Number(process.env.REGISTER_LIMIT_PER_HOUR || 5);
+  const limited = hit(`register:${ip}`, REGISTER_LIMIT, 60 * 60 * 1000);
   if (!limited.ok) return { status: 429, body: { error: { code: 'rate_limited', message: '注册过于频繁，请稍后再试' } } };
 
   const exists = db

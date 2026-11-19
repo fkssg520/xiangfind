@@ -2,6 +2,7 @@
 // 契约：docs/API契约.md §2-§4；状态机：D-001；通知去重：D-004
 import { nowIso, ID } from '../lib/id.js';
 import { attachImages, assertImagesExist } from './uploads.js';
+import { recomputeMatches, listMatches } from './matching.js';
 
 export const CATEGORIES = ['证件', '电子产品', '钥匙', '书籍', '衣物', '其他'];
 
@@ -125,22 +126,8 @@ export function getItem(db, id, viewer) {
   const isOwner = viewer && viewer.id === row.user_id;
   const isStaff = viewer && (viewer.role === 'admin' || viewer.role === 'volunteer');
 
-  // 匹配结果（只给摘要）
-  const matches = db
-    .prepare(
-      `SELECT m.score, m.reasons_json, i.id AS item_id, i.title, i.type, i.status
-         FROM matches m
-         JOIN items i ON i.id = CASE WHEN m.lost_item_id = ? THEN m.found_item_id ELSE m.lost_item_id END
-        WHERE m.lost_item_id = ? OR m.found_item_id = ?
-        ORDER BY m.score DESC LIMIT 5`
-    )
-    .all(id, id, id)
-    .map((m) => ({
-      itemId: m.item_id,
-      title: m.title,
-      score: m.score,
-      reasons: JSON.parse(m.reasons_json || '[]'),
-    }));
+  // 匹配结果（只给摘要；规则见 matching.js，D-002/D-003/D-004）
+  const matches = listMatches(db, id, 5);
 
   // 认领：优先给本人相关的申请；staff/owner 看到最新一条
   let claim = null;
@@ -285,6 +272,13 @@ export function createItem(db, { viewer, body }) {
     return { status: 400, body: { error: { code: 'image_failed', message: `图片处理失败：${err.message}` } } };
   }
 
+  // 新增后立刻算一次匹配（招领在 stored 后才会被匹配，这里先跑，不合条件的内部会跳过）
+  try {
+    recomputeMatches(db, id);
+  } catch (err) {
+    console.error('[items] 匹配计算失败：', err.message);
+  }
+
   return { status: 201, body: { item: getItem(db, id, viewer) } };
 }
 
@@ -294,7 +288,23 @@ export function patchItem(db, id, { viewer, body }) {
 
   const isOwner = viewer.id === item.user_id;
   const isAdmin = viewer.role === 'admin';
-  if (!isOwner && !isAdmin) return { status: 403, body: { error: { code: 'forbidden', message: '无权修改他人发布的信息' } } };
+
+  // 需求基线 §3：志愿者（仅所属存放点）、保卫处（仅保卫处存放点）可以确认入库
+  const assignedHere = item.storage_point_id
+    ? db.prepare('SELECT 1 AS x FROM volunteer_assignments WHERE user_id = ? AND storage_point_id = ?')
+        .get(viewer.id, item.storage_point_id)
+    : null;
+  const pointType = item.storage_point_id
+    ? db.prepare('SELECT type FROM storage_points WHERE id = ?').get(item.storage_point_id)?.type
+    : null;
+  // 需求基线 §3：确认入库 **发布者本人也不行**——只有所属存放点志愿者、管理员、保卫处可以
+  const isVolunteerForPoint = viewer.role === 'volunteer' && Boolean(assignedHere);
+  const isSecurityForPoint = viewer.role === 'security' && pointType === 'security';
+  const canConfirmStorage = isAdmin || isVolunteerForPoint || isSecurityForPoint;
+
+  if (!isOwner && !isAdmin && !isVolunteerForPoint && !isSecurityForPoint) {
+    return { status: 403, body: { error: { code: 'forbidden', message: '无权修改他人发布的信息' } } };
+  }
 
   const sets = [];
   const params = [];
@@ -305,26 +315,26 @@ export function patchItem(db, id, { viewer, body }) {
     const allowed = item.type === 'lost' ? LOST_STATUS : FOUND_STATUS;
     if (!allowed.includes(body.status)) {
       errors.push(['status', `该类型不允许状态 ${body.status}`]);
-    } else if (body.status === 'stored') {
-      // 确认入库只能由志愿者/管理员/保卫处做
-      if (!(isAdmin || viewer.role === 'volunteer' || viewer.role === 'security')) {
-        errors.push(['status', '只有志愿者或管理员可以确认入库']);
-      }
     } else if (item.status === 'returned' || item.status === 'archived') {
       errors.push(['status', '已结束的物品不能再改状态']);
+    } else if (body.status === 'stored' && !canConfirmStorage) {
+      // 确认入库：发布者本人、管理员、所属存放点志愿者、保卫处（仅保卫处存放点）
+      errors.push(['status', '只有所属存放点的志愿者或管理员可以确认入库']);
     } else {
       sets.push('status = ?');
       params.push(body.status);
     }
   }
 
-  // 内容字段：已入库的招领不允许改关键信息
+  // 内容字段：已入库的招领不允许改关键信息；志愿者/保卫处只能做状态确认，不能改内容
   const locked = item.status !== 'pending_storage' && item.status !== 'open';
+  const canEditContent = isOwner || isAdmin;
   for (const [field, column] of [
     ['title', 'title'], ['category', 'category'], ['description', 'description'],
     ['location', 'location'], ['eventAt', 'event_at'],
   ]) {
     if (body[field] === undefined) continue;
+    if (!canEditContent) { errors.push([field, '只有发布者或管理员可以修改物品内容']); continue; }
     if (locked && !isAdmin) { errors.push([field, '物品已入库，关键信息不能修改']); continue; }
     const value = field === 'eventAt' ? (body[field] ? String(body[field]) : null) : String(body[field]).trim();
     sets.push(`${column} = ?`);
@@ -351,6 +361,15 @@ export function patchItem(db, id, { viewer, body }) {
   sets.push('updated_at = ?');
   params.push(nowIso(), id);
   db.prepare(`UPDATE items SET ${sets.join(', ')} WHERE id = ?`).run(...params);
+
+  // 状态变化（尤其确认入库 stored）后重算匹配
+  if (body.status && body.status !== item.status) {
+    try {
+      recomputeMatches(db, id);
+    } catch (err) {
+      console.error('[items] 匹配重算失败：', err.message);
+    }
+  }
 
   return { status: 200, body: { item: getItem(db, id, viewer) } };
 }

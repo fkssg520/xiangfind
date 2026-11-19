@@ -213,7 +213,7 @@ export async function handleApi(req, res, ctx) {
   }
 
   // /api/items/:id
-  const itemMatch = path.match(/^\/api\/items\/([A-Za-z0-9_]+)$/);
+  const itemMatch = path.match(/^\/api\/items\/([A-Za-z0-9_-]+)$/);
   if (itemMatch) {
     const id = itemMatch[1];
 
@@ -235,11 +235,49 @@ export async function handleApi(req, res, ctx) {
   }
 
   // POST /api/items/:id/favorite
-  const favMatch = path.match(/^\/api\/items\/([A-Za-z0-9_]+)\/favorite$/);
+  const favMatch = path.match(/^\/api\/items\/([A-Za-z0-9_-]+)\/favorite$/);
   if (favMatch && req.method === 'POST') {
     if (!requireUser(res, viewer)) return true;
     const out = toggleFavorite(db, favMatch[1], viewer);
     json(res, out.status, out.body);
+    return true;
+  }
+
+  // ---------- 站内消息 ----------
+  if (path === '/api/messages' && req.method === 'GET') {
+    if (!requireUser(res, viewer)) return true;
+    const filter = url.searchParams.get('filter') || 'all';
+    const rows = db
+      .prepare(
+        `SELECT id, type, title, body, related_type, related_id, important, read_at, created_at
+           FROM messages WHERE user_id = ? ${filter === 'unread' ? 'AND read_at IS NULL' : ''}
+          ORDER BY created_at DESC LIMIT 50`
+      )
+      .all(viewer.id);
+    const unreadCount = db
+      .prepare('SELECT COUNT(*) AS c FROM messages WHERE user_id = ? AND read_at IS NULL')
+      .get(viewer.id).c;
+    json(res, 200, {
+      messages: rows.map((r) => ({
+        id: r.id, type: r.type, title: r.title, body: r.body,
+        relatedType: r.related_type, relatedId: r.related_id,
+        important: Boolean(r.important), readAt: r.read_at, createdAt: r.created_at,
+      })),
+      unreadCount,
+    });
+    return true;
+  }
+
+  const readMatch = path.match(/^\/api\/messages\/([A-Za-z0-9_-]+)\/read$/);
+  if (readMatch && req.method === 'POST') {
+    if (!requireUser(res, viewer)) return true;
+    const row = db.prepare('SELECT user_id FROM messages WHERE id = ?').get(readMatch[1]);
+    if (!row) return fail(res, 404, 'not_found', '消息不存在'), true;
+    if (row.user_id !== viewer.id) return fail(res, 403, 'forbidden', '无权操作他人消息'), true;
+    db.prepare('UPDATE messages SET read_at = ? WHERE id = ? AND read_at IS NULL')
+      .run(new Date().toISOString(), readMatch[1]);
+    res.writeHead(204, { 'set-cookie': res._cookies || [] });
+    res.end();
     return true;
   }
 
