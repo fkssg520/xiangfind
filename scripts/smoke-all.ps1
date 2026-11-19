@@ -49,6 +49,14 @@ $fOut | ForEach-Object { Write-Host $_ }
 $fLine = ($fOut | Select-String -Pattern '^结果：').Line
 $results += [pscustomobject]@{ 套件 = 'frontapi'; 结果 = $fLine }
 
+# 0.9) 前端函数引用（调用不存在的函数 = 浏览器里 ReferenceError）
+Write-Host ''
+Write-Host '===== frontrefs =====' -ForegroundColor Cyan
+$rOut = & node scripts/check-frontend-refs.mjs 2>&1
+$rOut | ForEach-Object { Write-Host $_ }
+$rLine = ($rOut | Select-String -Pattern '^结果：').Line
+$results += [pscustomobject]@{ 套件 = 'frontrefs'; 结果 = $rLine }
+
 foreach ($s in $suites) {
     $dbPath = Join-Path $repoRoot "data/smoke-$($s.name).db"
     $logPath = Join-Path $repoRoot "smoke-$($s.name).log"
