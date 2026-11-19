@@ -81,6 +81,9 @@ CREATE TABLE IF NOT EXISTS items (
   status            TEXT NOT NULL,
   created_at        TEXT NOT NULL,
   updated_at        TEXT NOT NULL,
+  -- 归还与归档时间（计划书 §2.2 要求记录完成时间；OI-10 保留策略用）
+  returned_at       TEXT,
+  archived_at       TEXT,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (storage_point_id) REFERENCES storage_points(id),
   -- 招领必须有存放点；失物不得有

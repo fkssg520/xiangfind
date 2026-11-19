@@ -38,6 +38,11 @@ function notify(db, userId, title, body, relatedId) {
 
 // 提交认领
 export function submitClaim(db, itemId, viewer, body) {
+  // 需求基线 §2.2：未验证邮箱不能认领
+  if (viewer && !viewer.email_verified_at && !viewer.emailVerified) {
+    return { status: 403, body: { error: { code: 'email_unverified', message: '请先完成邮箱验证再申请认领' } } };
+  }
+
   const item = db.prepare('SELECT * FROM items WHERE id = ?').get(itemId);
   if (!item) return { status: 404, body: { error: { code: 'not_found', message: '物品不存在' } } };
   if (item.type !== 'found') {
