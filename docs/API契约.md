@@ -35,6 +35,9 @@
 
 ### GET /api/items?type=found&category=电子&status=stored&q=耳机&page=1&pageSize=20
 
+> **匿名可读**（D-012）：未登录也能调，`viewer = null`；按 IP 限流 60 次/分钟，超限 429。
+> 匿名时 `isFavorited` 恒为 `false`，`author` 保留 `id + name + isVolunteer`。
+
 响应 200：
 ```json
 {
