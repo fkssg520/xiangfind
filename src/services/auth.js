@@ -279,6 +279,16 @@ export function resetPassword(db, body) {
   return { status: 200, body: { ok: true, message: '密码已重置，请用新密码登录' } };
 }
 
+// 供管理后台使用：替某个用户发一封重置密码验证码（不透露给调用方）
+export async function issuePasswordResetCode(db, email) {
+  const user = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+  if (!user) return { ok: false, reason: 'not_found' };
+  const r = await issueCode(db, user.id, email, 'reset');
+  if (r.reason === 'cooldown') return { ok: true, reason: 'cooldown', cooldownSeconds: r.cooldownSeconds };
+  if (r.reason === 'daily_limit') return { ok: false, reason: 'daily_limit' };
+  return { ok: true, delivered: r.delivered };
+}
+
 export function publicUser(user) {  if (!user) return null;
   return {
     id: user.id,

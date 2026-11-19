@@ -117,5 +117,42 @@ check('恢复后有物品', (reset.data?.counts?.items || 0) >= 4, JSON.stringif
 const afterReset = await call('GET', '/api/admin/audit-logs?limit=5');
 check('恢复动作进入审计', (afterReset.data?.logs || []).some((l) => l.action === 'demo.reset'));
 
+// 12. 用户停用 / 启用
+const targetUser = (await call('GET', '/api/admin/users?q=20230001')).data.users.find((u) => u.studentId === '20230001');
+const disable = await call('POST', `/api/admin/users/${targetUser.id}/status`, { status: 'disabled' });
+check('停用账号 200', disable.status === 200, disable.data?.error?.message);
+const disabledLogin = await (async () => {
+  const save = { ...jar };
+  const r = await loginAs('20230001');
+  jar = save;
+  return r;
+})();
+check('停用后无法登录 403', disabledLogin.status === 403, disabledLogin.data?.error?.message);
+const enable = await call('POST', `/api/admin/users/${targetUser.id}/status`, { status: 'active' });
+check('重新启用 200', enable.status === 200);
+
+// 13. 替用户发送重置密码邮件
+const resetMail = await call('POST', `/api/admin/users/${targetUser.id}/reset-password`);
+check('发送重置密码 200', resetMail.status === 200, resetMail.data?.error?.message);
+check('返回投递方式', ['email', 'log'].includes(resetMail.data?.delivery), resetMail.data?.delivery);
+
+// 14. 管理视角物品列表（含归档筛选）
+const adminItems = await call('GET', '/api/admin/items?pageSize=50');
+check('管理物品列表 200', adminItems.status === 200 && Array.isArray(adminItems.data?.items));
+check('含作者学号与存放点', adminItems.data.items.every((i) => i.author?.studentId && 'storagePointName' in i));
+
+// 15. 群发系统消息
+const broadcast = await call('POST', '/api/admin/messages', {
+  role: 'all', title: '系统维护通知', body: '今晚 23:00 将进行例行维护，期间可能短暂无法访问。',
+});
+check('群发系统消息 201', broadcast.status === 201, broadcast.data?.error?.message);
+check('收件人数 >= 3', (broadcast.data?.recipients || 0) >= 3, String(broadcast.data?.recipients));
+
+// 16. 导出统计
+const stats = await call('GET', '/api/admin/stats');
+check('统计 200', stats.status === 200);
+check('含物品状态分布', Array.isArray(stats.data?.items?.byStatus) && stats.data.items.byStatus.length > 0);
+check('含近 7 日新增', Array.isArray(stats.data?.daily) && stats.data.daily.length > 0);
+
 console.log(`\n结果：通过 ${pass}，失败 ${fail}`);
 process.exit(fail === 0 ? 0 : 1);
