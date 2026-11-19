@@ -56,13 +56,25 @@ const SCENARIOS = {
   async claim() {
     const { d, w } = await boot('#/login');
     await login(d, w, '20230001', 'demo1234');
-    w.location.hash = '#/item/itm_demo_1';
+
+    // 必须挑「别人发布、当前可认领」的招领——自己发的那种只会显示「管理这条信息」。
+    // 列表接口不返回 isOwner（只有详情有），所以用 /api/me 比作者 id。
+    const meRes = await w.fetch('/api/me', { headers: { accept: 'application/json' } });
+    const me = (await meRes.json()).user;
+    const res = await w.fetch('/api/items?pageSize=50', { headers: { accept: 'application/json' } });
+    const data = await res.json();
+    const cand = (data.items || []).find((i) => i.type === 'found'
+      && i.author && i.author.id !== me.id
+      && ['stored', 'open'].includes(i.status));
+    if (!cand) return { skipped: true, reason: '库里没有可认领的他人招领' };
+
+    w.location.hash = '#/item/' + cand.id;
     await wait(1600);
     const btn = d.querySelector('.claim-box .btn');
-    if (!btn || btn.disabled) return { canClaim: false };
+    if (!btn || btn.disabled) return { skipped: true, reason: '按钮不可用', text: btn ? btn.textContent : null };
     btn.click();
-    await wait(500);
-    return { canClaim: true, modal: Boolean(d.querySelector('.modal-mask')) };
+    await wait(600);
+    return { canClaim: true, item: cand.id, modal: Boolean(d.querySelector('.modal-mask')) };
   },
 
 
