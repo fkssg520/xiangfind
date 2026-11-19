@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>harness</title></head>
+<body>
+<!-- E2E harness：被 tests/e2e/run.mjs 用无头 Edge 打开，跑完把结果写进 title -->
+<iframe id="app" style="width:420px;height:900px;border:0"></iframe>
+<script>
+const params = new URLSearchParams(location.search);
+const BASE = params.get('base') || 'http://127.0.0.1:3000';
+const SCENARIO = params.get('scenario') || 'login';
+const frame = document.getElementById('app');
+
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const finish = (obj) => { document.title = 'RESULT:' + JSON.stringify(obj); };
+
+async function boot(hash) {
+  frame.src = BASE + '/index.html' + (hash || '#/plaza');
+  await new Promise((r) => { frame.onload = r; });
+  await wait(1200);
+  return { d: frame.contentDocument, w: frame.contentWindow };
+}
+
+async function login(d, w, studentId, password) {
+  w.location.hash = '#/login';
+  await wait(800);
+  const form = d.getElementById('form-login');
+  form.studentId.value = studentId;
+  form.password.value = password;
+  form.dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
+  await wait(2000);
+}
+
+const SCENARIOS = {
+  async login() {
+    const { d, w } = await boot('#/login');
+    await login(d, w, '20230001', 'demo1234');
+    return { who: d.getElementById('login-btn').textContent.trim(), hash: w.location.hash };
+  },
+
+  async plaza() {
+    const { d, w } = await boot('#/plaza');
+    await wait(1200);
+    return { cards: d.querySelectorAll('#plaza-grid .card').length, empty: !d.getElementById('plaza-empty').hidden };
+  },
+
+  async detail() {
+    const { d } = await boot('#/item/itm_demo_1');
+    await wait(1200);
+    return { title: d.querySelector('.detail-head h1')?.textContent || '', rows: d.querySelectorAll('.kv-row').length };
+  },
+
+  async claim() {
+    const { d, w } = await boot('#/login');
+    await login(d, w, '20230001', 'demo1234');
+    w.location.hash = '#/item/itm_demo_1';
+    await wait(1600);
+    const btn = d.querySelector('.claim-box .btn');
+    if (!btn || btn.disabled) return { canClaim: false };
+    btn.click();
+    await wait(500);
+    return { canClaim: true, modal: Boolean(d.querySelector('.modal-mask')) };
+  },
+
+  async admin() {
+    const { d, w } = await boot('#/login');
+    await login(d, w, '90000001', 'demo1234');
+    w.location.hash = '#/admin';
+    await wait(1800);
+    return {
+      tabs: [...d.querySelectorAll('.admin-tabs button')].map((b) => b.textContent),
+      kpis: d.querySelectorAll('.admin-kpi').length,
+    };
+  },
+
+  async forbidden() {
+    const { d, w } = await boot('#/login');
+    await login(d, w, '20230001', 'demo1234');
+    w.location.hash = '#/admin';
+    await wait(1500);
+    return { guarded: !d.querySelector('.admin-kpis'), text: d.querySelector('.empty')?.textContent || '' };
+  },
+};
+
+(async () => {
+  const errors = [];
+  try {
+    const run = SCENARIOS[SCENARIO];
+    if (!run) return finish({ error: 'unknown scenario: ' + SCENARIO });
+    const out = await run();
+    finish({ scenario: SCENARIO, ok: true, errors, ...out });
+  } catch (err) {
+    finish({ scenario: SCENARIO, ok: false, errors, error: String(err && err.message || err) });
+  }
+})();
+</script>
+</body>
+</html>
