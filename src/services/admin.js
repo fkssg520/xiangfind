@@ -2,6 +2,7 @@
 // 所有写操作都写 audit_logs（只追加）
 import { nowIso, ID } from '../lib/id.js';
 import { resetDemo } from '../db/demo.js';
+import { issuePasswordResetCode } from './auth.js';
 
 function audit(db, actorId, action, targetType, targetId, summary) {
   db.prepare(
@@ -213,8 +214,153 @@ export function resetDemoData(db, viewer) {
   }
 }
 
-export function listAudit(db, viewer, limit = 50) {
+// 停用 / 启用账号（停用会立即踢掉该用户所有会话）
+export function setUserStatus(db, userId, viewer, body) {
   if (!requireAdmin(viewer)) return { status: 403, body: { error: { code: 'forbidden', message: '需要管理员权限' } } };
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+  if (!user) return { status: 404, body: { error: { code: 'not_found', message: '用户不存在' } } };
+  if (user.id === viewer.id) return { status: 400, body: { error: { code: 'self', message: '不能停用自己' } } };
+  if (user.role === 'admin') return { status: 400, body: { error: { code: 'is_admin', message: '不能停用管理员账号' } } };
+
+  const status = body.status === 'disabled' ? 'disabled' : 'active';
+  db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, userId);
+  if (status === 'disabled') db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+  audit(db, viewer.id, status === 'disabled' ? 'user.disable' : 'user.enable', 'user', userId, `${status === 'disabled' ? '停用' : '启用'}账号：${user.name}`);
+  return { status: 200, body: { user: { id: userId, status } } };
+}
+
+// 替用户发一封重置密码验证码
+export async function sendPasswordReset(db, userId, viewer) {
+  if (!requireAdmin(viewer)) return { status: 403, body: { error: { code: 'forbidden', message: '需要管理员权限' } } };
+  const user = db.prepare('SELECT id, email, name FROM users WHERE id = ?').get(userId);
+  if (!user) return { status: 404, body: { error: { code: 'not_found', message: '用户不存在' } } };
+  if (!user.email) return { status: 400, body: { error: { code: 'no_email', message: '该用户没有绑定邮箱' } } };
+
+  const r = await issuePasswordResetCode(db, user.email);
+  audit(db, viewer.id, 'user.send_reset', 'user', userId, `为用户 ${user.name} 发送重置密码邮件`);
+  if (!r.ok) return { status: 429, body: { error: { code: r.reason, message: '发送受限（今日次数已达上限）' } } };
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      delivery: r.delivered ? 'email' : 'log',
+      cooldown: r.reason === 'cooldown' ? r.cooldownSeconds : 0,
+      note: '验证码 15 分钟内有效；开发环境打在服务端日志',
+    },
+  };
+}
+
+// 管理视角的物品列表（含归档，比公开列表多 author/point 明细）
+export function listItemsAdmin(db, viewer, query) {
+  if (!requireAdmin(viewer)) return { status: 403, body: { error: { code: 'forbidden', message: '需要管理员权限' } } };
+  const where = [];
+  const params = [];
+  if (query.status && query.status !== 'all') { where.push('i.status = ?'); params.push(query.status); }
+  if (query.type === 'lost' || query.type === 'found') { where.push('i.type = ?'); params.push(query.type); }
+  if (query.valueLevel === 'normal' || query.valueLevel === 'valuable') { where.push('i.value_level = ?'); params.push(query.valueLevel); }
+  const q = String(query.q || '').trim();
+  if (q) {
+    where.push('(i.title LIKE ? OR i.description LIKE ? OR u.name LIKE ? OR i.location LIKE ?)');
+    const like = `%${q}%`;
+    params.push(like, like, like, like);
+  }
+  if (query.includeArchived !== '1') where.push("i.status <> 'archived'");
+
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const rows = db
+    .prepare(
+      `SELECT i.id, i.type, i.title, i.category, i.status, i.value_level, i.location,
+              i.event_at, i.created_at, i.updated_at, i.returned_at,
+              u.id AS author_id, u.name AS author_name, u.student_id,
+              sp.name AS point_name
+         FROM items i JOIN users u ON u.id = i.user_id
+         LEFT JOIN storage_points sp ON sp.id = i.storage_point_id
+         ${whereSql}
+        ORDER BY i.created_at DESC LIMIT 200`
+    )
+    .all(...params);
+
+  return {
+    status: 200,
+    body: {
+      items: rows.map((r) => ({
+        id: r.id, type: r.type, title: r.title, category: r.category, status: r.status,
+        valueLevel: r.value_level, location: r.location, eventAt: r.event_at,
+        createdAt: r.created_at, updatedAt: r.updated_at, returnedAt: r.returned_at,
+        author: { id: r.author_id, name: r.author_name, studentId: r.student_id },
+        storagePointName: r.point_name,
+      })),
+      total: rows.length,
+    },
+  };
+}
+
+// 发送系统消息：按角色群发，或指定若干用户
+export function sendSystemMessage(db, viewer, body) {
+  if (!requireAdmin(viewer)) return { status: 403, body: { error: { code: 'forbidden', message: '需要管理员权限' } } };
+  const title = String(body.title || '').trim();
+  const text = String(body.body || '').trim();
+  if (title.length < 1 || title.length > 60) return { status: 400, body: { error: { code: 'title', message: '标题需 1-60 字' } } };
+  if (text.length < 1 || text.length > 1000) return { status: 400, body: { error: { code: 'body', message: '正文需 1-1000 字' } } };
+
+  let targets = [];
+  if (Array.isArray(body.userIds) && body.userIds.length) {
+    const inList = body.userIds.map(() => '?').join(',');
+    targets = db.prepare(`SELECT id FROM users WHERE status = 'active' AND id IN (${inList})`).all(...body.userIds).map((r) => r.id);
+  } else {
+    const role = String(body.role || 'all');
+    targets = role === 'all'
+      ? db.prepare("SELECT id FROM users WHERE status = 'active'").all().map((r) => r.id)
+      : db.prepare("SELECT id FROM users WHERE status = 'active' AND role = ?").all(role).map((r) => r.id);
+  }
+
+  if (!targets.length) return { status: 400, body: { error: { code: 'no_target', message: '没有匹配的收件人' } } };
+
+  const now = nowIso();
+  db.exec('BEGIN');
+  try {
+    const ins = db.prepare(
+      `INSERT INTO messages (id, user_id, type, title, body, related_type, related_id, important, read_at, created_at)
+       VALUES (?, ?, 'system', ?, ?, NULL, NULL, 1, NULL, ?)`
+    );
+    for (const uid of targets) ins.run(ID.message(), uid, title, text, now);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    return { status: 400, body: { error: { code: 'failed', message: err.message } } };
+  }
+
+  audit(db, viewer.id, 'message.broadcast', 'system', '', `群发系统消息「${title}」给 ${targets.length} 人`);
+  return { status: 201, body: { ok: true, recipients: targets.length } };
+}
+
+// 导出统计（JSON，前端可自行转 CSV）
+export function exportStats(db, viewer) {
+  if (!requireAdmin(viewer)) return { status: 403, body: { error: { code: 'forbidden', message: '需要管理员权限' } } };
+
+  const byStatus = db.prepare('SELECT status, COUNT(*) AS c FROM items GROUP BY status ORDER BY c DESC').all();
+  const byCategory = db.prepare('SELECT category, COUNT(*) AS c FROM items GROUP BY category ORDER BY c DESC').all();
+  const byType = db.prepare('SELECT type, COUNT(*) AS c FROM items GROUP BY type').all();
+  const claimsByStatus = db.prepare('SELECT status, COUNT(*) AS c FROM claims GROUP BY status').all();
+  const daily = db
+    .prepare(`SELECT substr(created_at, 1, 10) AS day, COUNT(*) AS c FROM items
+              GROUP BY day ORDER BY day DESC LIMIT 7`)
+    .all();
+  const users = db.prepare('SELECT role, COUNT(*) AS c FROM users GROUP BY role').all();
+
+  return {
+    status: 200,
+    body: {
+      generatedAt: nowIso(),
+      users,
+      items: { byStatus, byCategory, byType },
+      claims: claimsByStatus,
+      daily,
+    },
+  };
+}
+
+export function listAudit(db, viewer, limit = 50) {  if (!requireAdmin(viewer)) return { status: 403, body: { error: { code: 'forbidden', message: '需要管理员权限' } } };
   const rows = db
     .prepare(`SELECT a.*, u.name AS actor_name FROM audit_logs a LEFT JOIN users u ON u.id = a.actor_id
               ORDER BY a.created_at DESC LIMIT ?`)

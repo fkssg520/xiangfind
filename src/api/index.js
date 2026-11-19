@@ -9,6 +9,7 @@ import {
   overview as adminOverview, searchUsers as adminSearchUsers, setVolunteer,
   listStoragePoints, createStoragePoint, updateStoragePoint,
   listClaims as adminListClaims, resetDemoData, listAudit,
+  setUserStatus, sendPasswordReset, listItemsAdmin, sendSystemMessage, exportStats,
 } from '../services/admin.js';
 import { verifyCsrf } from '../lib/csrf.js';
 import {
@@ -351,6 +352,23 @@ export async function handleApi(req, res, ctx) {
     const volMatch = path.match(/^\/api\/admin\/users\/([A-Za-z0-9_-]+)\/volunteer$/);
     if (volMatch && (req.method === 'POST' || req.method === 'PATCH')) {
       const out = setVolunteer(db, volMatch[1], viewer, body); json(res, out.status, out.body); return true;
+    }
+    const statusMatch = path.match(/^\/api\/admin\/users\/([A-Za-z0-9_-]+)\/status$/);
+    if (statusMatch && (req.method === 'POST' || req.method === 'PATCH')) {
+      const out = setUserStatus(db, statusMatch[1], viewer, body); json(res, out.status, out.body); return true;
+    }
+    const resetPwMatch = path.match(/^\/api\/admin\/users\/([A-Za-z0-9_-]+)\/reset-password$/);
+    if (resetPwMatch && req.method === 'POST') {
+      const out = await sendPasswordReset(db, resetPwMatch[1], viewer); json(res, out.status, out.body); return true;
+    }
+    if (path === '/api/admin/items' && req.method === 'GET') {
+      const out = listItemsAdmin(db, viewer, Object.fromEntries(url.searchParams)); json(res, out.status, out.body); return true;
+    }
+    if (path === '/api/admin/messages' && req.method === 'POST') {
+      const out = sendSystemMessage(db, viewer, body); json(res, out.status, out.body); return true;
+    }
+    if (path === '/api/admin/stats' && req.method === 'GET') {
+      const out = exportStats(db, viewer); json(res, out.status, out.body); return true;
     }
     if (path === '/api/admin/storage-points' && req.method === 'GET') {
       const out = listStoragePoints(db, viewer); json(res, out.status, out.body); return true;
