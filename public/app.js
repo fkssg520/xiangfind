@@ -86,7 +86,7 @@ function el(tag, className, text) {
 }
 
 /* ---------- 广场页 ---------- */
-const state = { type: 'all', q: '', category: 'all', items: [], loaded: false };
+const state = { type: 'all', q: '', category: 'all', items: [], total: 0, page: 1, loading: false, loaded: false, error: '' };
 
 function statusBadge(item) {
   const table = STATUS_MAP[item.type] || {};
@@ -127,72 +127,109 @@ function cardOf(item) {
   return card;
 }
 
-function filtered() {
-  const q = state.q.trim().toLowerCase();
-  return state.items.filter((it) => {
-    if (state.type !== 'all' && it.type !== state.type) return false;
-    if (state.category !== 'all' && it.category !== state.category) return false;
-    if (!q) return true;
-    const hay = [it.title, it.summary, it.location, it.category].filter(Boolean).join(' ').toLowerCase();
-    return hay.includes(q);
-  });
+const CATEGORIES = ['证件', '电子产品', '钥匙', '书籍', '衣物', '其他'];
+const PAGE_SIZE = 9;
+
+async function fetchItems({ append = false } = {}) {
+  const params = new URLSearchParams();
+  if (state.type !== 'all') params.set('type', state.type);
+  if (state.category !== 'all') params.set('category', state.category);
+  const q = state.q.trim();
+  if (q) params.set('q', q);
+  params.set('page', String(state.page));
+  params.set('pageSize', String(PAGE_SIZE));
+
+  const res = await fetch(`/api/items?${params.toString()}`, { headers: { accept: 'application/json' } });
+  if (res.status === 401) return { unauth: true };
+  if (!res.ok) { const e = new Error('HTTP ' + res.status); e.status = res.status; throw e; }
+
+  const data = await res.json();
+  const list = Array.isArray(data.items) ? data.items : [];
+  state.items = append ? state.items.concat(list) : list;
+  state.total = Number(data.total) || 0;
+  return { ok: true };
 }
 
 function renderPlaza() {
   const grid = document.getElementById('plaza-grid');
   const empty = document.getElementById('plaza-empty');
+  const more = document.getElementById('plaza-more');
   if (!grid) return;
 
-  grid.replaceChildren();
-
   if (!state.loaded) {
+    grid.replaceChildren();
     for (let i = 0; i < 3; i += 1) grid.append(el('div', 'skeleton'));
-    empty.hidden = true;
+    if (empty) empty.hidden = true;
+    if (more) more.hidden = true;
     return;
   }
 
-  const list = filtered();
-  list.forEach((item) => grid.append(cardOf(item)));
-  empty.hidden = list.length > 0;
+  grid.replaceChildren();
+  state.items.forEach((item) => grid.append(cardOf(item)));
+
+  if (empty) {
+    empty.hidden = state.items.length > 0;
+    if (state.error && state.items.length === 0) {
+      empty.textContent = state.error + ' · 点这里重试';
+      empty.onclick = () => { state.error = ''; resetAndLoad(); };
+    } else {
+      empty.textContent = '没有找到符合条件的物品，换个关键词试试。';
+      empty.onclick = null;
+    }
+  }
+  if (more) more.hidden = state.items.length >= state.total || Boolean(state.error);
 }
 
 function renderCategories() {
   const box = document.getElementById('cats');
   if (!box) return;
-
-  const cats = [...new Set(state.items.map((i) => i.category).filter(Boolean))];
   box.replaceChildren();
 
-  const all = el('button', state.category === 'all' ? 'on' : '', '全部类别');
-  all.type = 'button';
-  all.addEventListener('click', () => { state.category = 'all'; renderCategories(); renderPlaza(); });
-  box.append(all);
-
-  cats.forEach((c) => {
-    const b = el('button', state.category === c ? 'on' : '', c);
+  const mk = (label, value) => {
+    const b = el('button', state.category === value ? 'on' : '', label);
     b.type = 'button';
     b.addEventListener('click', () => {
-      state.category = state.category === c ? 'all' : c;
+      state.category = state.category === value && value !== 'all' ? 'all' : value;
       renderCategories();
-      renderPlaza();
+      resetAndLoad();
     });
-    box.append(b);
-  });
+    return b;
+  };
+
+  box.append(mk('全部类别', 'all'));
+  CATEGORIES.forEach((c) => box.append(mk(c, c)));
 }
 
-async function loadItems() {
+async function reloadPlaza({ append = false } = {}) {
+  if (state.loading) return;
+  state.loading = true;
+  if (!append) { state.loaded = false; renderPlaza(); }
+
   try {
-    const res = await fetch(`${API_PREFIX}${MOCK.items}`, { headers: { accept: 'application/json' } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    state.items = Array.isArray(data.items) ? data.items : [];
+    const out = await fetchItems({ append });
+    if (out.unauth) {
+      state.items = [];
+      state.total = 0;
+      toast('登录后查看广场');
+      location.hash = '#/login';
+    }
   } catch (err) {
-    console.warn('[湘寻] mock 加载失败，使用空列表：', err.message);
-    state.items = [];
+    console.warn('[湘寻] 列表加载失败：', err.message);
+    state.error = err.status === 429 ? '请求太频繁，稍等一下再试' : '加载失败';
+    if (!append) { state.items = []; state.total = 0; }
+    toast(state.error);
+  } finally {
+    state.loading = false;
+    state.loaded = true;
+    renderPlaza();
   }
-  state.loaded = true;
-  renderCategories();
-  renderPlaza();
+}
+
+function resetAndLoad() {
+  state.page = 1;
+  state.items = [];
+  state.total = 0;
+  reloadPlaza();
 }
 
 /* ---------- 未读角标 ---------- */
@@ -211,19 +248,24 @@ function bindPlaza() {
     if (!btn) return;
     state.type = btn.dataset.type;
     [...seg.querySelectorAll('button')].forEach((b) => b.classList.toggle('on', b === btn));
-    renderPlaza();
+    resetAndLoad();
   });
 
   const q = document.getElementById('q');
   let timer = null;
   q?.addEventListener('input', () => {
     clearTimeout(timer);
-    timer = setTimeout(() => { state.q = q.value; renderPlaza(); }, 180);
+    timer = setTimeout(() => { state.q = q.value; resetAndLoad(); }, 180);
   });
 
   document.getElementById('search-btn')?.addEventListener('click', () => {
     state.q = q?.value || '';
-    renderPlaza();
+    resetAndLoad();
+  });
+
+  document.getElementById('plaza-more')?.addEventListener('click', () => {
+    state.page += 1;
+    reloadPlaza({ append: true });
   });
 }
 
@@ -234,7 +276,8 @@ bindAuth();
 bindPublish();
 refreshMe();
 setUnread(3); // mock：等 /api/messages 就绪后改为真实 unreadCount
-loadItems();
+renderCategories();
+resetAndLoad();
 
 /* ---------- 详情页 ---------- */
 const CLAIMABLE = new Set(['stored', 'pending_storage', 'open']);
