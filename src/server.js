@@ -75,6 +75,21 @@ async function serveStatic(res, urlPath) {
 }
 
 const server = createServer(async (req, res) => {
+  try {
+    await route(req, res);
+  } catch (err) {
+    // 任何未预期异常都不能让进程退出
+    console.error('[server] 未捕获异常：', err?.stack || err?.message || err);
+    if (!res.headersSent) {
+      res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: { code: 'internal', message: '服务端错误' } }));
+    } else {
+      res.end();
+    }
+  }
+});
+
+async function route(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const path = url.pathname;
 
@@ -101,7 +116,7 @@ const server = createServer(async (req, res) => {
   // 每个页面请求都确保存在 CSRF Cookie，前端从 document.cookie 读出放进请求头
   ensureCsrf(req, res);
   return serveStatic(res, path);
-});
+}
 
 server.listen(PORT, () => {
   console.log(`湘寻已启动 → http://localhost:${PORT}`);
