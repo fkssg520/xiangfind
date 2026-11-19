@@ -3,6 +3,7 @@
 // 契约：docs/API契约.md　样例：docs/fixtures/items.json
 // 切换真实接口时只改 API_PREFIX，不改字段映射。
 
+let currentUser = null; // 当前登录用户（null = 未登录）
 const API_PREFIX = ''; // 例：'' = 同源；'/api' = 后端前缀。mock 阶段留空。
 const MOCK = {
   items: 'mock/items.json',
@@ -222,6 +223,8 @@ function bindPlaza() {
 /* ---------- 启动 ---------- */
 renderRoute();
 bindPlaza();
+bindAuth();
+refreshMe();
 setUnread(3); // mock：等 /api/messages 就绪后改为真实 unreadCount
 loadItems();
 
@@ -345,4 +348,163 @@ function toast(msg) {
   const t = el('div', 'toast', msg);
   document.body.append(t);
   setTimeout(() => t.remove(), 2200);
+}
+
+/* ---------- 接口封装（CSRF 双提交） ---------- */
+function csrfToken() {
+  const m = document.cookie.match(/(?:^|;\s*)xf_csrf=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
+async function api(path, { method = 'GET', body } = {}) {
+  const headers = { accept: 'application/json' };
+  if (body) headers['content-type'] = 'application/json';
+  const token = csrfToken();
+  if (token) headers['x-csrf-token'] = token;
+
+  const res = await fetch(`/api${path}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+    credentials: 'same-origin',
+  });
+
+  let data = null;
+  try { data = await res.json(); } catch { /* 204 */ }
+  return { ok: res.ok, status: res.status, data };
+}
+
+function errText(r, fallback) {
+  return r?.data?.error?.message || fallback;
+}
+
+/* ---------- 登录态 ---------- */
+
+function renderUser() {
+  const btn = document.getElementById('login-btn');
+  if (!btn) return;
+  if (currentUser) {
+    btn.textContent = currentUser.name || currentUser.studentId;
+    btn.href = '#/me';
+  } else {
+    btn.textContent = '登录';
+    btn.href = '#/login';
+  }
+}
+
+async function refreshMe() {
+  const r = await api('/me');
+  currentUser = r.ok ? r.data.user : null;
+  renderUser();
+  return currentUser;
+}
+
+/* ---------- 登录 / 注册 ---------- */
+function showAuthForm(which) {
+  ['login', 'register', 'verify'].forEach((k) => {
+    const form = document.getElementById(`form-${k}`);
+    if (form) form.hidden = k !== which;
+  });
+  document.querySelectorAll('[data-auth-tab]').forEach((b) => {
+    b.classList.toggle('on', b.dataset.authTab === which || (which === 'verify' && b.dataset.authTab === 'register'));
+  });
+}
+
+function setMsg(id, text, ok = false) {
+  const box = document.getElementById(id);
+  if (!box) return;
+  box.hidden = !text;
+  box.textContent = text || '';
+  box.classList.toggle('ok', !!ok);
+}
+
+function busy(btn, on, label) {
+  if (!btn) return;
+  btn.disabled = on;
+  if (on) { btn.dataset.label = btn.textContent; btn.textContent = label || '处理中…'; }
+  else if (btn.dataset.label) { btn.textContent = btn.dataset.label; }
+}
+
+function bindAuth() {
+  const tabs = document.getElementById('auth-tabs');
+  tabs?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-auth-tab]');
+    if (!b) return;
+    setMsg('login-msg', '');
+    setMsg('reg-msg', '');
+    showAuthForm(b.dataset.authTab);
+  });
+
+  /* 登录 */
+  document.getElementById('form-login')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type=submit]');
+    setMsg('login-msg', '');
+    busy(btn, true, '登录中…');
+    const r = await api('/auth/login', {
+      method: 'POST',
+      body: {
+        studentId: e.target.studentId.value.trim(),
+        password: e.target.password.value,
+      },
+    });
+    busy(btn, false);
+    if (!r.ok) return setMsg('login-msg', errText(r, '登录失败，请检查学号与密码'));
+    await refreshMe();
+    location.hash = '#/plaza';
+    toast(`欢迎回来，${currentUser?.name || ''}`);
+  });
+
+  /* 注册 → 发验证码 */
+  const PENDING_KEY = 'xf_pending_email';
+  let pendingEmail = sessionStorage.getItem(PENDING_KEY) || '';
+  document.getElementById('form-register')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type=submit]');
+    setMsg('reg-msg', '');
+    busy(btn, true, '发送中…');
+    const body = {
+      studentId: e.target.studentId.value.trim(),
+      name: e.target.elements.name.value.trim(),
+      email: e.target.email.value.trim(),
+      password: e.target.password.value,
+      confirmPassword: e.target.confirmPassword.value,
+    };
+    const r = await api('/auth/register', { method: 'POST', body });
+    busy(btn, false);
+    if (!r.ok) return setMsg('reg-msg', errText(r, '注册失败'));
+    pendingEmail = body.email;
+    sessionStorage.setItem(PENDING_KEY, pendingEmail);
+    document.getElementById('verify-email').textContent = pendingEmail;
+    showAuthForm('verify');
+  });
+
+  /* 验证码 → 自动登录 */
+  document.getElementById('form-verify')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type=submit]');
+    setMsg('verify-msg', '');
+    busy(btn, true, '验证中…');
+    const r = await api('/auth/verify-email', {
+      method: 'POST',
+      body: { email: pendingEmail || sessionStorage.getItem(PENDING_KEY) || document.getElementById('verify-email').textContent, code: e.target.code.value.trim() },
+    });
+    busy(btn, false);
+    if (!r.ok) return setMsg('verify-msg', errText(r, '验证失败'));
+    await refreshMe();
+    location.hash = '#/plaza';
+    toast('注册成功，已登录');
+  });
+
+  document.getElementById('verify-back')?.addEventListener('click', () => {
+    setMsg('verify-msg', '');
+    showAuthForm('register');
+  });
+
+  /* restore verify step after refresh */
+  if (pendingEmail && parseHash().name === 'login') {
+    const box = document.getElementById('verify-email');
+    if (box) box.textContent = pendingEmail;
+    showAuthForm('verify');
+  }
 }

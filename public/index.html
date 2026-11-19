@@ -112,13 +112,56 @@
 
     <!-- ⑦ 登录 / 注册 -->
     <section class="view" id="view-login">
-      <div class="page-head">
-        <h1>登录 / 注册</h1>
-        <p>校园身份验证，仅限本校师生。</p>
-      </div>
-      <div class="placeholder">
-        <h2>登录页施工中</h2>
-        <p>学号 + 密码登录、邮箱验证码注册，11/19 出静态版，11/20 接真实接口。</p>
+      <div class="auth-wrap">
+        <div class="auth-card">
+          <div class="auth-tabs" id="auth-tabs">
+            <button type="button" data-auth-tab="login" class="on">登录</button>
+            <button type="button" data-auth-tab="register">注册</button>
+          </div>
+
+          <form class="auth-form" id="form-login">
+            <label class="field"><span>学号</span>
+              <input class="input" id="login-student" name="studentId" inputmode="numeric" autocomplete="username" placeholder="如 20230001" required>
+            </label>
+            <label class="field"><span>密码</span>
+              <input class="input" id="login-pass" name="password" type="password" autocomplete="current-password" placeholder="至少 8 位" required>
+            </label>
+            <p class="auth-msg" id="login-msg" hidden></p>
+            <button class="btn auth-submit" type="submit">登录</button>
+            <p class="auth-hint">演示账号：20230001 / demo1234</p>
+          </form>
+
+          <form class="auth-form" id="form-register" hidden>
+            <label class="field"><span>学号</span>
+              <input class="input" name="studentId" inputmode="numeric" placeholder="如 20230001" required>
+            </label>
+            <label class="field"><span>姓名</span>
+              <input class="input" name="name" placeholder="真实姓名（仅用于核对身份）" required>
+            </label>
+            <label class="field"><span>校园邮箱</span>
+              <input class="input" name="email" type="email" placeholder="name@xtu.edu.cn" required>
+            </label>
+            <label class="field"><span>密码</span>
+              <input class="input" name="password" type="password" minlength="8" placeholder="至少 8 位，含字母与数字" required>
+            </label>
+            <label class="field"><span>确认密码</span>
+              <input class="input" name="confirmPassword" type="password" minlength="8" required>
+            </label>
+            <p class="auth-msg" id="reg-msg" hidden></p>
+            <button class="btn auth-submit" type="submit">发送验证码</button>
+          </form>
+
+          <form class="auth-form" id="form-verify" hidden>
+            <p class="auth-note">验证码已发送到 <b id="verify-email"></b>，10 分钟内有效。</p>
+            <label class="field"><span>6 位验证码</span>
+              <input class="input" name="code" inputmode="numeric" maxlength="6" placeholder="000000" required>
+            </label>
+            <p class="auth-msg" id="verify-msg" hidden></p>
+            <button class="btn auth-submit" type="submit">验证并登录</button>
+            <button class="auth-link" type="button" id="verify-back">换一个邮箱</button>
+            <p class="auth-hint">开发环境未配 SMTP，验证码请查看服务端日志（<code>[mail:dev]</code>）。</p>
+          </form>
+        </div>
       </div>
     </section>
 
