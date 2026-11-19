@@ -50,3 +50,43 @@ powershell -NoProfile -ExecutionPolicy Bypass -File D:\Deepseek\tools\bootstrap.
 ```
 
 它会恢复 Node / gh / git 配置 / GitHub 代理 / 仓库状态。**GitHub 走本机 CONNECT 代理（127.0.0.1:7899）**，不再依赖 hosts 固定 IP。
+
+## 5. 开分支前必须同步 main（2026-11-19 教训，栽了两次）
+
+```powershell
+git checkout main
+git pull --ff-only
+git checkout -b b/xxx
+```
+
+**为什么**：#41 和 #42 两轮都因为**分支起点是旧的**导致 PR 冲突，小灰那侧等了 10 分钟才处理，
+第二次他直接替我解了 CSS 冲突（随后被人类按 D-013 纠正）。冲突的根因在我，不在他。
+
+**判断依据**：`git log --oneline origin/main..HEAD` 里出现**别人的 commit**，说明分支起点过期了。
+
+## 6. 合并 UI 类 PR 前先跑 E2E
+
+```powershell
+npm run dev                                                # 另开窗口
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/e2e/run.ps1
+```
+
+**为什么**：2026-11-19 晚上，main 上 `app.js` 出现 `openClaimDialog` 重复声明，
+整个模块解析失败——**页面骨架正常，但所有交互全死**（登录没反应、广场空白）。
+这种 bug 看 diff 发现不了，只有跑起来才暴露。E2E 就是那时候补的，6 个场景。
+
+**合并方（小灰）也应该跑**，我在每个 UI PR 里都写了这句话。
+
+## 7. 对方没回时（D-013，适用于双方）
+
+需要对方动作而对方没回应时，我能做的只有两件：
+
+1. 在对应 PR / issue 里**提醒一次**
+2. **告诉人类「他没回，等你决定」**
+
+然后停手。**不替他改代码、不替他合并、不绕过评审**。
+
+等待期做这些（不碰他的文件、不开新功能分支）：
+- 静态自检（重复声明、重复 id、CSS 花括号、冲突标记残留）
+- 更新自己的文档与节奏记录
+- 把待办整理成清单，等他回了一条条推
