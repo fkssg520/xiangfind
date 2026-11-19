@@ -523,3 +523,10 @@ main { max-width: var(--page-max); margin: 0 auto; padding: var(--s-32) var(--s-
 .claim-note.warn { color: #9a4c37; }
 .claim-acts { display: flex; gap: 12px; margin-top: 6px; }
 @media (max-width: 760px) { .modal { padding: var(--s-16); } }
+
+/* ---------- 后台：操作条与志愿者弹窗 ---------- */
+.admin-bar { display: flex; gap: 12px; align-items: center; }
+.admin-bar .admin-act { margin-right: 0; }
+.vol-list { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 4px; max-height: 220px; overflow-y: auto; }
+.vol-item { display: flex; align-items: center; gap: 8px; font-size: 13.5px; padding: 6px 8px; border-radius: 8px; background: rgba(212,163,115,.10); }
+.vol-item input { accent-color: #b5654a; }
