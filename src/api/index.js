@@ -2,6 +2,7 @@
 import { json, fail, readJson, addCookie, clearCookie, clientIp } from '../lib/http.js';
 import { Readable } from 'node:stream';
 import { saveUpload, MAX_FILES } from '../services/uploads.js';
+import { hit } from '../lib/ratelimit.js';
 import { verifyCsrf } from '../lib/csrf.js';
 import {
   SESSION_COOKIE, SESSION_TTL_MS, createSession, destroySession, getSessionUser,
@@ -184,11 +185,21 @@ export async function handleApi(req, res, ctx) {
   }
 
   // ---------- 物品 ----------
+  // D-012：广场对游客只读开放（人类 2026-11-19 拍板），写操作仍要求登录
   const viewer = currentUser(req, db);
+  const anonLimit = () => {
+    if (viewer) return true;
+    const r = hit(`anon:read:${ip}`, 60, 60 * 1000);
+    if (!r.ok) {
+      fail(res, 429, 'rate_limited', '访问过于频繁，请稍后再试');
+      return false;
+    }
+    return true;
+  };
 
-  // GET /api/items
+  // GET /api/items（匿名可读）
   if (path === '/api/items' && req.method === 'GET') {
-    if (!requireUser(res, viewer)) return true;
+    if (!anonLimit()) return true;
     json(res, 200, listItems(db, { viewer, query: Object.fromEntries(url.searchParams) }));
     return true;
   }
@@ -204,15 +215,18 @@ export async function handleApi(req, res, ctx) {
   // /api/items/:id
   const itemMatch = path.match(/^\/api\/items\/([A-Za-z0-9_]+)$/);
   if (itemMatch) {
-    if (!requireUser(res, viewer)) return true;
     const id = itemMatch[1];
 
     if (req.method === 'GET') {
+      // 详情同样对游客只读开放（D-012）
+      if (!anonLimit()) return true;
       const item = getItem(db, id, viewer);
       if (!item) return fail(res, 404, 'not_found', '物品不存在'), true;
       json(res, 200, { item });
       return true;
     }
+
+    if (!requireUser(res, viewer)) return true;
     if (req.method === 'PATCH') {
       const out = patchItem(db, id, { viewer, body });
       json(res, out.status, out.body);
