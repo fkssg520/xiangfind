@@ -225,6 +225,46 @@ export function confirmReturn(db, itemId, viewer, ) {
   return { status: 200, body: { item: { id: itemId, status: STATUS_AFTER_RETURN } } };
 }
 
+// 我的认领申请（跨物品，个人中心用）
+export function myClaims(db, viewer, query) {
+  const status = String(query.status || 'all');
+  const rows = db
+    .prepare(
+      `SELECT c.*, i.title AS item_title, i.status AS item_status, i.type AS item_type,
+              i.location AS item_location, i.storage_point_id
+         FROM claims c JOIN items i ON i.id = c.item_id
+        WHERE c.applicant_id = ? ${status === 'all' ? '' : 'AND c.status = ?'}
+        ORDER BY c.created_at DESC LIMIT 100`
+    )
+    .all(...(status === 'all' ? [viewer.id] : [viewer.id, status]));
+
+  const points = db.prepare('SELECT id, name, address, hours FROM storage_points').all();
+  const pointMap = new Map(points.map((p) => [p.id, p]));
+
+  return {
+    status: 200,
+    body: {
+      claims: rows.map((r) => ({
+        id: r.id,
+        itemId: r.item_id,
+        itemTitle: r.item_title,
+        itemStatus: r.item_status,
+        itemType: r.item_type,
+        itemLocation: r.item_location,
+        status: r.status,
+        note: r.note,
+        reviewNote: r.review_note,
+        createdAt: r.created_at,
+        reviewedAt: r.reviewed_at,
+        // 通过后给出领取地点，和消息里的口径一致
+        storagePoint: r.status === 'approved' && r.storage_point_id
+          ? (pointMap.get(r.storage_point_id) || null)
+          : null,
+      })),
+    },
+  };
+}
+
 // 读取某物品的申请列表（发布者 / 授权角色 / 申请人本人）
 export function listClaims(db, itemId, viewer) {
   const item = db.prepare('SELECT * FROM items WHERE id = ?').get(itemId);

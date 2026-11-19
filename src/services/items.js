@@ -56,6 +56,13 @@ export function listItems(db, { viewer, query }) {
   const where = [];
   const params = [];
 
+  // mine=1：只看自己发布的（个人中心「我的发布」）
+  if (query.mine === '1' || query.mine === 'true') {
+    if (!viewer) return { items: [], total: 0, page: 1, pageSize: 20, requiresLogin: true };
+    where.push('i.user_id = ?');
+    params.push(viewer.id);
+  }
+
   const type = query.type;
   if (type && (type === 'lost' || type === 'found')) { where.push('i.type = ?'); params.push(type); }
 

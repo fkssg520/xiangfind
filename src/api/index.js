@@ -3,7 +3,7 @@ import { json, fail, readJson, addCookie, clearCookie, clientIp } from '../lib/h
 import { Readable } from 'node:stream';
 import { saveUpload, MAX_FILES } from '../services/uploads.js';
 import { hit } from '../lib/ratelimit.js';
-import { submitClaim, decideClaim, confirmReturn, listClaims } from '../services/claims.js';
+import { submitClaim, decideClaim, confirmReturn, listClaims, myClaims } from '../services/claims.js';
 import { listMatches } from '../services/matching.js';
 import {
   overview as adminOverview, searchUsers as adminSearchUsers, setVolunteer,
@@ -325,6 +325,14 @@ export async function handleApi(req, res, ctx) {
   if (returnMatch && req.method === 'POST') {
     if (!requireUser(res, viewer)) return true;
     const out = confirmReturn(db, returnMatch[1], viewer);
+    json(res, out.status, out.body);
+    return true;
+  }
+
+  // GET /api/claims/mine（我的认领申请，个人中心用）
+  if (path === '/api/claims/mine' && req.method === 'GET') {
+    if (!requireUser(res, viewer)) return true;
+    const out = myClaims(db, viewer, Object.fromEntries(url.searchParams));
     json(res, out.status, out.body);
     return true;
   }
