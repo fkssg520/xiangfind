@@ -60,12 +60,61 @@
     <section class="view" id="view-publish">
       <div class="page-head">
         <h1>发布信息</h1>
-        <p>发布后进入审核，通过即展示在广场。</p>
+        <p>丢了东西发「失物」，捡到东西发「招领」。审核通过后展示在广场。</p>
       </div>
-      <div class="placeholder">
-        <h2>发布页施工中</h2>
-        <p>表单结构按 <code>docs/API契约.md</code> §4 设计，11/20 交付。</p>
-      </div>
+
+      <form class="card publish-form" id="form-publish" novalidate>
+        <div class="seg" id="pub-type">
+          <button type="button" data-type="lost" class="on">我丢了东西</button>
+          <button type="button" data-type="found">我捡到东西</button>
+        </div>
+
+        <label class="field"><span>标题 <i>*</i></span>
+          <input class="input" name="title" maxlength="60" placeholder="如：白色蓝牙耳机（带充电盒）">
+        </label>
+
+        <div class="grid-2">
+          <label class="field"><span>分类 <i>*</i></span>
+            <select class="input" name="category">
+              <option value="证件">证件</option>
+              <option value="电子产品">电子产品</option>
+              <option value="钥匙">钥匙</option>
+              <option value="书籍">书籍</option>
+              <option value="衣物">衣物</option>
+              <option value="其他">其他</option>
+            </select>
+          </label>
+          <label class="field"><span>价值</span>
+            <select class="input" name="valueLevel">
+              <option value="normal">普通</option>
+              <option value="valuable">贵重（只能存保卫处）</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="grid-2">
+          <label class="field"><span>地点 <i>*</i></span>
+            <input class="input" name="location" maxlength="80" placeholder="如：图书馆三楼自习区">
+          </label>
+          <label class="field"><span>发生时间</span>
+            <input class="input" name="eventAt" type="datetime-local">
+          </label>
+        </div>
+
+        <label class="field" id="pub-storage-wrap"><span>存放点 <i>*</i></span>
+          <select class="input" name="storagePointId"></select>
+        </label>
+
+        <label class="field"><span>描述 <i>*</i></span>
+          <textarea class="input area" name="description" maxlength="500" rows="4" placeholder="外观、磨损、内容物……越具体越容易被认出来"></textarea>
+        </label>
+
+        <p class="auth-msg" id="pub-msg" hidden></p>
+        <div class="pub-actions">
+          <button class="btn" type="submit">提交</button>
+          <span class="pub-hint">提交后进入审核，可在「我的」里修改</span>
+        </div>
+      </form>
     </section>
 
     <!-- ③ 物品详情 -->
