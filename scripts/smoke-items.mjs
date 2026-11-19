@@ -147,5 +147,19 @@ check('匿名列表不含联系方式', (anon.data?.items || []).every((i) => !(
 const anonWrite = await call('POST', '/api/items', { type: 'lost', title: 'x', category: '其他', description: 'x', location: 'x' }, false);
 check('未登录写操作被拒（403/401）', anonWrite.status === 403 || anonWrite.status === 401, `实际 ${anonWrite.status}`);
 
+// 14. 我的发布（mine=1）
+const mineList = await call('GET', '/api/items?mine=1&pageSize=50');
+check('mine=1 返回 200', mineList.status === 200);
+check('mine=1 只含自己的物品', (mineList.data?.items || []).every((i) => i.author?.id === mineList.data.items[0]?.author?.id));
+const anonMine = await call('GET', '/api/items?mine=1', null, false);
+check('匿名 mine=1 返回空并标记需登录', anonMine.status === 200 && anonMine.data?.requiresLogin === true
+  && (anonMine.data?.items || []).length === 0);
+
+// 15. 我的认领申请
+const myClaims = await call('GET', '/api/claims/mine');
+check('GET /api/claims/mine 200', myClaims.status === 200 && Array.isArray(myClaims.data?.claims));
+const anonClaims = await call('GET', '/api/claims/mine', null, false);
+check('匿名访问我的认领 401', anonClaims.status === 401 || anonClaims.status === 403, `实际 ${anonClaims.status}`);
+
 console.log(`\n结果：通过 ${pass}，失败 ${fail}`);
 process.exit(fail === 0 ? 0 : 1);
