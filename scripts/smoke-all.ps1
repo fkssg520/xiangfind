@@ -41,6 +41,14 @@ $sOut | ForEach-Object { Write-Host $_ }
 $sLine = ($sOut | Select-String -Pattern '^结果：').Line
 $results += [pscustomobject]@{ 套件 = 'secrets'; 结果 = $sLine }
 
+# 0.8) 前端调用的接口是否都存在（打错一个字 = 运行时才炸）
+Write-Host ''
+Write-Host '===== frontapi =====' -ForegroundColor Cyan
+$fOut = & node scripts/check-frontend-api.mjs 2>&1
+$fOut | ForEach-Object { Write-Host $_ }
+$fLine = ($fOut | Select-String -Pattern '^结果：').Line
+$results += [pscustomobject]@{ 套件 = 'frontapi'; 结果 = $fLine }
+
 foreach ($s in $suites) {
     $dbPath = Join-Path $repoRoot "data/smoke-$($s.name).db"
     $logPath = Join-Path $repoRoot "smoke-$($s.name).log"
