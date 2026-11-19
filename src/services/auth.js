@@ -75,16 +75,16 @@ export async function register(db, body, ip) {
 }
 
 async function issueCode(db, userId, email, purpose) {
-  // 冷却：同一邮箱 60 秒内不能重发
+  // 冷却按「邮箱 + 用途」计：刚注册完不该挡住找回密码
   const last = db
-    .prepare("SELECT created_at FROM email_tokens WHERE email = ? ORDER BY created_at DESC LIMIT 1")
-    .get(email);
+    .prepare("SELECT created_at FROM email_tokens WHERE email = ? AND purpose = ? ORDER BY created_at DESC LIMIT 1")
+    .get(email, purpose);
   if (last) {
     const wait = RESEND_COOLDOWN_MS - (Date.now() - new Date(last.created_at).getTime());
     if (wait > 0) return { delivered: false, reason: 'cooldown', cooldownSeconds: Math.ceil(wait / 1000) };
   }
 
-  // 每日上限
+  // 每日上限仍按邮箱总量算（防止被当短信炮）
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayCount = db
@@ -198,8 +198,88 @@ export function login(db, body, ip) {
   };
 }
 
-export function publicUser(user) {
-  if (!user) return null;
+// 找回密码：发一次性 reset 验证码（不透露邮箱是否存在，防枚举）
+export async function forgotPassword(db, body, ip) {
+  const email = String(body.email || '').trim().toLowerCase();
+  const limited = hit(`forgot:${email}:${ip}`, 5, 30 * 60 * 1000);
+  if (!limited.ok) {
+    return { status: 429, body: { error: { code: 'rate_limited', message: '请求过于频繁，请稍后再试' } } };
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { status: 400, body: { error: { code: 'email', message: '邮箱格式不正确' } } };
+  }
+
+  const user = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+  // 无论存在与否都返回 200 同样文案
+  if (user) {
+    const r = await issueCode(db, user.id, email, 'reset');
+    if (r.reason === 'cooldown') {
+      return { status: 429, body: { error: { code: 'cooldown', message: `请 ${r.cooldownSeconds} 秒后再试`, retryAfter: r.cooldownSeconds } } };
+    }
+    if (r.reason === 'daily_limit') {
+      return { status: 429, body: { error: { code: 'daily_limit', message: '今天发送次数已达上限' } } };
+    }
+  }
+  return { status: 200, body: { ok: true, message: '如果该邮箱已注册，验证码已发送' } };
+}
+
+// 重置密码：校验 reset 验证码 → 改密码 → 踢掉所有旧会话
+export function resetPassword(db, body) {
+  const email = String(body.email || '').trim().toLowerCase();
+  const code = String(body.code || '').trim();
+  const password = String(body.password || '');
+  const confirm = String(body.confirmPassword ?? body.confirm ?? '');
+
+  if (!/^\d{6}$/.test(code)) {
+    return { status: 400, body: { error: { code: 'code', message: '验证码为 6 位数字' } } };
+  }
+  if (password.length < 8 || password.length > 64 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+    return { status: 400, body: { error: { code: 'password', message: '密码需 8-64 位，且同时包含字母和数字' } } };
+  }
+  if (confirm && confirm !== password) {
+    return { status: 400, body: { error: { code: 'confirmPassword', message: '两次输入的密码不一致' } } };
+  }
+
+  const token = db
+    .prepare(
+      `SELECT * FROM email_tokens
+        WHERE email = ? AND purpose = 'reset' AND used_at IS NULL
+        ORDER BY created_at DESC LIMIT 1`
+    )
+    .get(email);
+
+  if (!token) return { status: 400, body: { error: { code: 'code', message: '验证码不存在或已使用' } } };
+  if (new Date(token.expires_at).getTime() <= Date.now()) {
+    return { status: 400, body: { error: { code: 'expired', message: '验证码已过期，请重新获取' } } };
+  }
+  if (token.attempts >= MAX_ATTEMPTS) {
+    return { status: 429, body: { error: { code: 'attempts', message: '错误次数过多，请重新获取验证码' } } };
+  }
+  if (token.code_hash !== codeHash(email, code)) {
+    db.prepare('UPDATE email_tokens SET attempts = attempts + 1 WHERE id = ?').run(token.id);
+    return { status: 400, body: { error: { code: 'code', message: '验证码不正确' } } };
+  }
+
+  const user = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+  if (!user) return { status: 400, body: { error: { code: 'code', message: '验证码不存在或已使用' } } };
+
+  const now = nowIso();
+  db.exec('BEGIN');
+  try {
+    db.prepare('UPDATE email_tokens SET used_at = ? WHERE id = ?').run(now, token.id);
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(password), user.id);
+    // 安全问题：改密码后所有旧会话失效
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    return { status: 500, body: { error: { code: 'failed', message: '重置失败，请稍后再试' } } };
+  }
+
+  return { status: 200, body: { ok: true, message: '密码已重置，请用新密码登录' } };
+}
+
+export function publicUser(user) {  if (!user) return null;
   return {
     id: user.id,
     studentId: user.student_id ?? user.studentId,

@@ -20,6 +20,13 @@ const db = new DatabaseSync(DB_PATH);
 db.exec('PRAGMA journal_mode = WAL');
 db.exec('PRAGMA foreign_keys = ON');
 db.exec(readFileSync(new URL('./db/schema.sql', import.meta.url), 'utf8'));
+// 补列（与 migrate.js 保持一致，保证直接 npm start 也能拿到新字段）
+try {
+  const { ensureColumns } = await import('./db/evolve.js');
+  ensureColumns(db);
+} catch (err) {
+  console.error('[db] 补列失败：', err.message);
+}
 const ctx = { db };
 ensureUploadDir();
 

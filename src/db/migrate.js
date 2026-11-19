@@ -13,6 +13,12 @@ const sql = readFileSync(new URL('./schema.sql', import.meta.url), 'utf8');
 const db = new DatabaseSync(DB_PATH);
 
 db.exec(sql);
+
+// 补列（可重复执行）
+const { ensureColumns } = await import('./evolve.js');
+const added = ensureColumns(db);
+if (added.length) console.log(`已补列: ${added.join(', ')}`);
+
 db.prepare('INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)')
   .run(VERSION, nowIso());
 
