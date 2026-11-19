@@ -28,16 +28,23 @@ function overlapRatio(a, b) {
   return hit / Math.min(a.size, b.size);
 }
 
-// 地点：完全相同或互相包含 → 20；共享关键词 → 12；否则 0
+// 地点：完全相同或互相包含 → 20；同一地点前缀或关键词重合 → 12；否则 0
 function scoreLocation(a, b) {
   const x = String(a || '').trim();
   const y = String(b || '').trim();
   if (!x || !y) return { score: 0, reason: null };
   if (x === y) return { score: 20, reason: '地点相同' };
   if (x.includes(y) || y.includes(x)) return { score: 20, reason: '地点相同' };
+
+  // 中文地名通常共享前缀（图书馆…、体育馆…），先用前两字判断
+  const head = (s) => s.replace(/[\s\p{P}\p{S}]+/gu, '').slice(0, 2);
+  const hx = head(x);
+  const hy = head(y);
+  if (hx.length === 2 && hx === hy) return { score: 12, reason: '地点相近' };
+
   const ta = tokens(x);
   const tb = tokens(y);
-  if (overlapRatio(ta, tb) >= 0.4) return { score: 12, reason: '地点相近' };
+  if (overlapRatio(ta, tb) >= 0.3) return { score: 12, reason: '地点相近' };
   return { score: 0, reason: null };
 }
 
