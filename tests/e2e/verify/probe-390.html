@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>verify-390</title></head>
+<body>
+<!-- 390px 溢出检查：被 check-390.ps1 用无头 Edge 打开，结果写进 title -->
+<iframe id="app" style="width:390px;height:844px;border:0"></iframe>
+<script>
+const params = new URLSearchParams(location.search);
+const BASE = params.get('base') || '';
+const ROUTES = [
+  '#/plaza', '#/publish', '#/item/itm_demo_1',
+  '#/me', '#/me/claims', '#/me/favs',
+  '#/messages', '#/login',
+  '#/admin', '#/admin/claims', '#/admin/users', '#/admin/points',
+];
+const frame = document.getElementById('app');
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+frame.src = BASE + '/index.html#/login';
+frame.onload = async () => {
+  const out = { ok: true, errors: [], vw: 0, rows: [] };
+  try {
+    const d = frame.contentDocument, w = frame.contentWindow;
+    w.confirm = () => true;
+    w.alert = () => {};
+    out.vw = w.innerWidth;
+
+    // 用管理员登录，保证后台四个页签都能渲染
+    const lf = d.getElementById('form-login');
+    lf.studentId.value = '90000001';
+    lf.password.value = 'demo1234';
+    lf.dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
+    await wait(1800);
+
+    for (const r of ROUTES) {
+      w.location.hash = r;
+      await wait(900);
+      out.rows.push({
+        route: r,
+        scrollW: d.documentElement.scrollWidth,
+        overflow: d.documentElement.scrollWidth > w.innerWidth,
+      });
+    }
+  } catch (err) {
+    out.ok = false;
+    out.errors.push(String(err && err.message || err));
+  }
+  document.title = 'RESULT:' + JSON.stringify(out);
+};
+</script>
+</body>
+</html>
