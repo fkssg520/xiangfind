@@ -10,7 +10,8 @@ $suites = @(
     @{ name = 'uploads';  file = 'scripts/smoke-uploads.mjs';  port = 3123 },
     @{ name = 'matching'; file = 'scripts/smoke-matching.mjs'; port = 3124 },
     @{ name = 'claims';   file = 'scripts/smoke-claims.mjs';   port = 3125 },
-    @{ name = 'gaps';     file = 'scripts/smoke-gaps.mjs';     port = 3126 }
+    @{ name = 'gaps';     file = 'scripts/smoke-gaps.mjs';     port = 3126 },
+    @{ name = 'admin';    file = 'scripts/smoke-admin.mjs';    port = 3127 }
 )
 
 $results = @()

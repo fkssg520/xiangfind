@@ -5,6 +5,11 @@ import { saveUpload, MAX_FILES } from '../services/uploads.js';
 import { hit } from '../lib/ratelimit.js';
 import { submitClaim, decideClaim, confirmReturn, listClaims } from '../services/claims.js';
 import { listMatches } from '../services/matching.js';
+import {
+  overview as adminOverview, searchUsers as adminSearchUsers, setVolunteer,
+  listStoragePoints, createStoragePoint, updateStoragePoint,
+  listClaims as adminListClaims, resetDemoData, listAudit,
+} from '../services/admin.js';
 import { verifyCsrf } from '../lib/csrf.js';
 import {
   SESSION_COOKIE, SESSION_TTL_MS, createSession, destroySession, getSessionUser,
@@ -322,6 +327,43 @@ export async function handleApi(req, res, ctx) {
     const out = confirmReturn(db, returnMatch[1], viewer);
     json(res, out.status, out.body);
     return true;
+  }
+
+  // ---------- 管理后台 ----------
+  if (path.startsWith('/api/admin/')) {
+    if (!requireUser(res, viewer)) return true;
+    if (viewer.role !== 'admin') return fail(res, 403, 'forbidden', '需要管理员权限'), true;
+
+    if (path === '/api/admin/overview' && req.method === 'GET') {
+      const out = adminOverview(db); json(res, out.status, out.body); return true;
+    }
+    if (path === '/api/admin/users' && req.method === 'GET') {
+      const out = adminSearchUsers(db, Object.fromEntries(url.searchParams), viewer); json(res, out.status, out.body); return true;
+    }
+    const volMatch = path.match(/^\/api\/admin\/users\/([A-Za-z0-9_-]+)\/volunteer$/);
+    if (volMatch && (req.method === 'POST' || req.method === 'PATCH')) {
+      const out = setVolunteer(db, volMatch[1], viewer, body); json(res, out.status, out.body); return true;
+    }
+    if (path === '/api/admin/storage-points' && req.method === 'GET') {
+      const out = listStoragePoints(db, viewer); json(res, out.status, out.body); return true;
+    }
+    if (path === '/api/admin/storage-points' && req.method === 'POST') {
+      const out = createStoragePoint(db, viewer, body); json(res, out.status, out.body); return true;
+    }
+    const spMatch = path.match(/^\/api\/admin\/storage-points\/([A-Za-z0-9_-]+)$/);
+    if (spMatch && req.method === 'PATCH') {
+      const out = updateStoragePoint(db, spMatch[1], viewer, body); json(res, out.status, out.body); return true;
+    }
+    if (path === '/api/admin/claims' && req.method === 'GET') {
+      const out = adminListClaims(db, viewer, Object.fromEntries(url.searchParams)); json(res, out.status, out.body); return true;
+    }
+    if (path === '/api/admin/reset-demo' && req.method === 'POST') {
+      const out = resetDemoData(db, viewer); json(res, out.status, out.body); return true;
+    }
+    if (path === '/api/admin/audit-logs' && req.method === 'GET') {
+      const out = listAudit(db, viewer, url.searchParams.get('limit')); json(res, out.status, out.body); return true;
+    }
+    return fail(res, 404, 'not_found', `管理接口不存在：${req.method} ${path}`), true;
   }
 
   // ---------- 站内消息 ----------
