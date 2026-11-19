@@ -24,6 +24,14 @@ $domOut | ForEach-Object { Write-Host $_ }
 $domLine = ($domOut | Select-String -Pattern '^结果：').Line
 $results += [pscustomobject]@{ 套件 = 'dom'; 结果 = $domLine }
 
+# 0.5) 契约漂移（文档 vs 实现）
+Write-Host ''
+Write-Host '===== contract =====' -ForegroundColor Cyan
+$cOut = & node scripts/check-contract.mjs 2>&1
+$cOut | ForEach-Object { Write-Host $_ }
+$cLine = ($cOut | Select-String -Pattern '^结果：').Line
+$results += [pscustomobject]@{ 套件 = 'contract'; 结果 = $cLine }
+
 foreach ($s in $suites) {
     $dbPath = Join-Path $repoRoot "data/smoke-$($s.name).db"
     $logPath = Join-Path $repoRoot "smoke-$($s.name).log"
