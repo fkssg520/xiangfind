@@ -404,3 +404,6 @@ main { max-width: var(--page-max); margin: 0 auto; padding: var(--s-32) var(--s-
   .pub-actions { flex-direction: column; align-items: stretch; }
   .pub-hint { text-align: center; }
 }
+
+/* 加载更多 */
+.more-wrap { display: flex; justify-content: center; margin-top: var(--s-24); }
