@@ -5,8 +5,26 @@ import {
   SESSION_COOKIE, SESSION_TTL_MS, createSession, destroySession, getSessionUser,
 } from '../lib/session.js';
 import { register, resendCode, verifyEmail, login, publicUser } from '../services/auth.js';
+import { listItems, getItem, createItem, patchItem, toggleFavorite } from '../services/items.js';
 
 const WRITE_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
+
+function sessionToken(req) {
+  const m = (req.headers.cookie || '').match(new RegExp(`${SESSION_COOKIE}=([^;]+)`));
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
+function currentUser(req, db) {
+  return getSessionUser(db, sessionToken(req));
+}
+
+function requireUser(res, user) {
+  if (!user) {
+    fail(res, 401, 'unauthenticated', '请先登录');
+    return false;
+  }
+  return true;
+}
 
 function setSessionCookie(res, token) {
   addCookie(res, SESSION_COOKIE, token, {
@@ -97,6 +115,52 @@ export async function handleApi(req, res, ctx) {
       return true;
     }
     json(res, 200, { user: publicUser(user) });
+    return true;
+  }
+
+  // ---------- 物品 ----------
+  const viewer = currentUser(req, db);
+
+  // GET /api/items
+  if (path === '/api/items' && req.method === 'GET') {
+    if (!requireUser(res, viewer)) return true;
+    json(res, 200, listItems(db, { viewer, query: Object.fromEntries(url.searchParams) }));
+    return true;
+  }
+
+  // POST /api/items
+  if (path === '/api/items' && req.method === 'POST') {
+    if (!requireUser(res, viewer)) return true;
+    const out = createItem(db, { viewer, body });
+    json(res, out.status, out.body);
+    return true;
+  }
+
+  // /api/items/:id
+  const itemMatch = path.match(/^\/api\/items\/([A-Za-z0-9_]+)$/);
+  if (itemMatch) {
+    if (!requireUser(res, viewer)) return true;
+    const id = itemMatch[1];
+
+    if (req.method === 'GET') {
+      const item = getItem(db, id, viewer);
+      if (!item) return fail(res, 404, 'not_found', '物品不存在'), true;
+      json(res, 200, { item });
+      return true;
+    }
+    if (req.method === 'PATCH') {
+      const out = patchItem(db, id, { viewer, body });
+      json(res, out.status, out.body);
+      return true;
+    }
+  }
+
+  // POST /api/items/:id/favorite
+  const favMatch = path.match(/^\/api\/items\/([A-Za-z0-9_]+)\/favorite$/);
+  if (favMatch && req.method === 'POST') {
+    if (!requireUser(res, viewer)) return true;
+    const out = toggleFavorite(db, favMatch[1], viewer);
+    json(res, out.status, out.body);
     return true;
   }
 
