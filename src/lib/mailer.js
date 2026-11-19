@@ -3,7 +3,7 @@
 let nodemailer = null;
 let transporter = null;
 
-function smtpConfigured() {
+export function isSmtpConfigured() {
   return Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD);
 }
 
@@ -16,41 +16,57 @@ async function getTransporter() {
       return null;
     }
   }
+  const port = Number(process.env.SMTP_PORT || 465);
   transporter = nodemailer.default.createTransport({
     host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 465),
-    secure: Number(process.env.SMTP_PORT || 465) === 465,
+    port,
+    secure: port === 465,
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
   });
   return transporter;
 }
 
-export async function sendVerificationCode(email, code, purpose = 'verify') {
-  const title = purpose === 'reset' ? '重设密码验证码' : '邮箱验证码';
-  const text = `你的${title}是 ${code}，15 分钟内有效。如非本人操作请忽略本邮件。`;
-
-  if (!smtpConfigured()) {
-    console.log(`[mail:dev] to=${email} code=${code} purpose=${purpose}（未配置 SMTP，仅打日志）`);
+// 通用发信：返回 { delivered, reason, messageId? }
+export async function sendMail({ to, subject, text, html }) {
+  if (!isSmtpConfigured()) {
+    console.log(`[mail:dev] to=${to} subject=${subject}（未配置 SMTP，仅打日志）`);
     return { delivered: false, reason: 'smtp_not_configured' };
   }
 
   const tx = await getTransporter();
   if (!tx) {
     console.warn('[mail] nodemailer 未安装，降级为日志输出');
-    console.log(`[mail:dev] to=${email} code=${code}`);
     return { delivered: false, reason: 'nodemailer_missing' };
   }
 
   try {
-    await tx.sendMail({
+    const info = await tx.sendMail({
       from: process.env.MAIL_FROM || process.env.SMTP_USER,
-      to: email,
-      subject: `【湘寻】${title}`,
+      to,
+      subject,
       text,
+      ...(html ? { html } : {}),
     });
-    return { delivered: true };
+    return { delivered: true, messageId: info?.messageId };
   } catch (err) {
     console.error('[mail] 发送失败：', err.message);
-    return { delivered: false, reason: 'send_failed' };
+    return { delivered: false, reason: 'send_failed', error: err.message };
   }
+}
+
+export async function sendVerificationCode(email, code, purpose = 'verify') {
+  const title = purpose === 'reset' ? '重设密码验证码' : '邮箱验证码';
+  const text = `你的${title}是 ${code}，15 分钟内有效。如非本人操作请忽略本邮件。`;
+
+  if (!isSmtpConfigured()) {
+    console.log(`[mail:dev] to=${email} code=${code} purpose=${purpose}（未配置 SMTP，仅打日志）`);
+    return { delivered: false, reason: 'smtp_not_configured' };
+  }
+
+  const out = await sendMail({ to: email, subject: `【湘寻】${title}`, text });
+  // 发信失败时把验证码打到日志，避免用户彻底收不到（生产应接监控告警）
+  if (!out.delivered) {
+    console.log(`[mail:fallback] to=${email} code=${code} purpose=${purpose} reason=${out.reason}`);
+  }
+  return out;
 }

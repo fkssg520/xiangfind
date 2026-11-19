@@ -33,6 +33,14 @@ $cOut | ForEach-Object { Write-Host $_ }
 $cLine = ($cOut | Select-String -Pattern '^结果：').Line
 $results += [pscustomobject]@{ 套件 = 'contract'; 结果 = $cLine }
 
+# 0.7) 交付前安全自检（密钥泄漏 / 真实个人信息）
+Write-Host ''
+Write-Host '===== secrets =====' -ForegroundColor Cyan
+$sOut = & node scripts/check-secrets.mjs 2>&1
+$sOut | ForEach-Object { Write-Host $_ }
+$sLine = ($sOut | Select-String -Pattern '^结果：').Line
+$results += [pscustomobject]@{ 套件 = 'secrets'; 结果 = $sLine }
+
 foreach ($s in $suites) {
     $dbPath = Join-Path $repoRoot "data/smoke-$($s.name).db"
     $logPath = Join-Path $repoRoot "smoke-$($s.name).log"
