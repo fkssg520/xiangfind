@@ -1,0 +1,21 @@
+{
+  "claims": [
+    {
+      "id": "clm_demo_1",
+      "itemId": "itm_demo_1",
+      "itemTitle": "白色蓝牙耳机",
+      "status": "pending",
+      "createdAt": "2026-11-16T08:20:00.000Z",
+      "note": "盒盖有一道约 2cm 的浅划痕，左耳机贴了一张小贴纸。"
+    },
+    {
+      "id": "clm_demo_2",
+      "itemId": "itm_demo_4",
+      "itemTitle": "一串宿舍钥匙",
+      "status": "rejected",
+      "createdAt": "2026-11-15T11:05:00.000Z",
+      "note": "挂件是卡通猫。",
+      "reviewNote": "特征与实物不符（实物是兔子挂件）"
+    }
+  ]
+}

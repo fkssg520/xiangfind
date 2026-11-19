@@ -1,0 +1,35 @@
+{
+  "messages": [
+    {
+      "id": "msg_demo_1",
+      "type": "match",
+      "title": "有 1 条信息可能和你的失物匹配",
+      "body": "「白色蓝牙耳机」与你的寻物帖匹配度 78%，地点同在图书馆。",
+      "relatedType": "item",
+      "relatedId": "itm_demo_1",
+      "readAt": null,
+      "createdAt": "2026-11-16T08:30:00.000Z"
+    },
+    {
+      "id": "msg_demo_2",
+      "type": "claim",
+      "title": "有人申请认领你捡到的物品",
+      "body": "「白色蓝牙耳机」收到一条认领申请，需要你确认物品特征。",
+      "relatedType": "item",
+      "relatedId": "itm_demo_1",
+      "readAt": null,
+      "createdAt": "2026-11-16T09:10:00.000Z"
+    },
+    {
+      "id": "msg_demo_3",
+      "type": "system",
+      "title": "你的信息已通过审核",
+      "body": "「图书馆丢了一张校园卡」已展示在广场。",
+      "relatedType": "item",
+      "relatedId": "itm_demo_2",
+      "readAt": "2026-11-16T09:30:00.000Z",
+      "createdAt": "2026-11-16T09:25:00.000Z"
+    }
+  ],
+  "unreadCount": 2
+}

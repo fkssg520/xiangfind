@@ -1,0 +1,24 @@
+{
+  "items": [
+    {
+      "id": "itm_demo_1",
+      "type": "found",
+      "title": "白色蓝牙耳机",
+      "category": "电子产品",
+      "location": "图书馆三楼自习区",
+      "status": "stored",
+      "createdAt": "2026-11-16T03:10:00.000Z",
+      "images": []
+    },
+    {
+      "id": "itm_demo_2",
+      "type": "lost",
+      "title": "图书馆丢了一张校园卡",
+      "category": "证件",
+      "location": "图书馆二楼借阅区",
+      "status": "open",
+      "createdAt": "2026-11-16T06:20:00.000Z",
+      "images": []
+    }
+  ]
+}
