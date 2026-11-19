@@ -4,6 +4,26 @@
 > 本文档按「一台 Ubuntu 云服务器 + 域名 + HTTPS」写。
 > **没有服务器、想今天就拿到公网地址 → 看 [`TUNNEL.md`](TUNNEL.md)（Cloudflare 隧道，免费，10 分钟）。**
 
+## 最快路径：一条命令
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fkssg520/xiangfind/main/deploy/install.sh -o install.sh
+sudo bash install.sh --domain 你的域名 --email 你的邮箱
+```
+
+脚本把下面 §1-§7 全做完（装 Node/nginx、建用户、拉代码、生成 `.env`、建库、装 systemd、配 nginx、可选申请证书），
+**幂等**，重复执行只更新代码并重启。
+
+| 参数 | 作用 |
+|---|---|
+| `--domain` | 必填，如 `xiangfind.example.com` |
+| `--email` | 申请证书用（不给就跳过 HTTPS） |
+| `--port` | 应用端口，默认 3000 |
+| `--no-ssl` | 只配 HTTP（域名还没解析好时用） |
+| `--skip-seed` | 不灌演示数据（正式上线） |
+
+**想手工一步步来、或脚本哪步失败了要排查 → 读下面的 §1-§9。**
+
 ---
 
 ## 0. 前置

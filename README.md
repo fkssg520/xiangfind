@@ -102,8 +102,13 @@ journal/        每日交接日志
 
 | 路线 | 成本 | 上线时间 | 适合 | 文档 |
 |---|---|---|---|---|
-| **A. Ubuntu 云服务器** | ¥25-60/月 | 1-2 小时 | 演示后长期用 | [`deploy/DEPLOY.md`](deploy/DEPLOY.md) |
+| **A. Ubuntu 云服务器** | ¥25-60/月 | **约 15 分钟**（一键脚本） | 演示后长期用 | [`deploy/DEPLOY.md`](deploy/DEPLOY.md) |
 | **B. Cloudflare 隧道** | 免费 | 10 分钟 | 11/23 演示当天 | [`deploy/TUNNEL.md`](deploy/TUNNEL.md) |
+
+```bash
+# 路线 A 一键部署（Ubuntu 服务器上，sudo）
+sudo bash deploy/install.sh --domain 你的域名 --email 你的邮箱
+```
 
 ```powershell
 # 路线 B 一键起（先 npm start 把服务跑起来）
