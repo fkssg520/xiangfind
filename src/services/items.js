@@ -1,6 +1,7 @@
 // 物品服务：列表、详情、发布、编辑、收藏
 // 契约：docs/API契约.md §2-§4；状态机：D-001；通知去重：D-004
 import { nowIso, ID } from '../lib/id.js';
+import { attachImages } from './uploads.js';
 
 export const CATEGORIES = ['证件', '电子产品', '钥匙', '书籍', '衣物', '其他'];
 
@@ -262,6 +263,17 @@ export function createItem(db, { viewer, body }) {
     id, viewer.id, data.type, data.title, data.category, data.description, data.eventAt,
     data.location, data.valueLevel, data.storagePointId, status, now, now
   );
+
+  // 图片（可选）：先上传拿到 fileName，再随发布一起挂上
+  if (Array.isArray(body.images) && body.images.length) {
+    if (body.images.length > 3) {
+      return { status: 400, body: { error: { code: 'too_many', message: '最多 3 张图片' } } };
+    }
+    const attached = attachImages(db, id, body.images, () => ID.image());
+    if (attached.error) {
+      return { status: 400, body: { error: attached.error } };
+    }
+  }
 
   return { status: 201, body: { item: getItem(db, id, viewer) } };
 }

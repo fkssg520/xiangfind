@@ -1,5 +1,7 @@
 // /api 路由分发
 import { json, fail, readJson, addCookie, clearCookie, clientIp } from '../lib/http.js';
+import { Readable } from 'node:stream';
+import { saveUpload, MAX_FILES } from '../services/uploads.js';
 import { verifyCsrf } from '../lib/csrf.js';
 import {
   SESSION_COOKIE, SESSION_TTL_MS, createSession, destroySession, getSessionUser,
@@ -26,6 +28,63 @@ function requireUser(res, user) {
   return true;
 }
 
+// ---------- 图片上传（multipart/form-data） ----------
+async function handleUpload(req, res, ctx) {
+  const viewer = currentUser(req, ctx.db);
+  if (!viewer) {
+    fail(res, 401, 'unauthenticated', '请先登录');
+    return;
+  }
+
+  const contentType = req.headers['content-type'] || '';
+  if (!contentType.includes('multipart/form-data')) {
+    fail(res, 400, 'bad_content_type', '请用 multipart/form-data 上传');
+    return;
+  }
+
+  let form;
+  try {
+    const request = new Request('http://localhost/api/uploads', {
+      method: 'POST',
+      headers: { 'content-type': contentType },
+      body: Readable.toWeb(req),
+      duplex: 'half',
+    });
+    form = await request.formData();
+  } catch {
+    fail(res, 400, 'bad_form', '表单解析失败');
+    return;
+  }
+
+  const files = form.getAll('files').filter((f) => typeof f === 'object' && 'arrayBuffer' in f);
+  if (files.length === 0) {
+    fail(res, 400, 'no_file', '没有收到文件，字段名应为 files');
+    return;
+  }
+  if (files.length > MAX_FILES) {
+    fail(res, 400, 'too_many', `一次最多上传 ${MAX_FILES} 张`);
+    return;
+  }
+
+  const saved = [];
+  for (const file of files) {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const out = saveUpload(buffer, file.name);
+    if (out.error) {
+      fail(res, 400, out.error.code, out.error.message);
+      return;
+    }
+    saved.push({
+      fileName: out.fileName,
+      url: `/uploads/${out.fileName}`,
+      mimeType: out.mimeType,
+      size: out.size,
+    });
+  }
+
+  json(res, 201, { files: saved });
+}
+
 function setSessionCookie(res, token) {
   addCookie(res, SESSION_COOKIE, token, {
     httpOnly: true,
@@ -43,6 +102,12 @@ export async function handleApi(req, res, ctx) {
   // 所有写操作先过 CSRF
   if (WRITE_METHODS.has(req.method) && !verifyCsrf(req)) {
     fail(res, 403, 'csrf', 'CSRF 校验失败，请刷新页面重试');
+    return true;
+  }
+
+  // 图片上传是 multipart，不能走下面的 JSON 解析
+  if (path === '/api/uploads' && req.method === 'POST') {
+    await handleUpload(req, res, ctx);
     return true;
   }
 

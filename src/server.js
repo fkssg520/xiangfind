@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { handleApi } from './api/index.js';
 import { ensureCsrf } from './lib/csrf.js';
+import { uploadsDir, ensureUploadDir } from './services/uploads.js';
 
 const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
 const PUBLIC_DIR = join(ROOT, 'public');
@@ -20,6 +21,25 @@ db.exec('PRAGMA journal_mode = WAL');
 db.exec('PRAGMA foreign_keys = ON');
 db.exec(readFileSync(new URL('./db/schema.sql', import.meta.url), 'utf8'));
 const ctx = { db };
+ensureUploadDir();
+
+// 直接服务一个绝对路径文件（用于 uploads 目录）
+async function serveFile(res, filePath) {
+  try {
+    const info = await stat(filePath);
+    if (!info.isFile()) throw new Error('not a file');
+    const data = await readFile(filePath);
+    res.writeHead(200, {
+      'content-type': MIME[extname(filePath).toLowerCase()] || 'application/octet-stream',
+      'content-length': data.length,
+      'cache-control': 'public, max-age=86400',
+    });
+    res.end(data);
+  } catch {
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end('404 Not Found');
+  }
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -111,6 +131,13 @@ async function route(req, res) {
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     return json(res, 405, { error: 'method_not_allowed' });
+  }
+
+  // 上传的图片：直接从 uploads 目录读（文件名已做白名单过滤）
+  if (path.startsWith('/uploads/')) {
+    const name = path.slice('/uploads/'.length).replace(/[^A-Za-z0-9._-]/g, '');
+    if (!name) return json(res, 404, { error: 'not_found' });
+    return serveFile(res, join(uploadsDir(), name));
   }
 
   // 每个页面请求都确保存在 CSRF Cookie，前端从 document.cookie 读出放进请求头
