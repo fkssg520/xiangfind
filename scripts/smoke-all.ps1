@@ -8,7 +8,8 @@ $suites = @(
     @{ name = 'auth';     file = 'scripts/smoke-auth.mjs';     port = 3121 },
     @{ name = 'items';    file = 'scripts/smoke-items.mjs';    port = 3122 },
     @{ name = 'uploads';  file = 'scripts/smoke-uploads.mjs';  port = 3123 },
-    @{ name = 'matching'; file = 'scripts/smoke-matching.mjs'; port = 3124 }
+    @{ name = 'matching'; file = 'scripts/smoke-matching.mjs'; port = 3124 },
+    @{ name = 'claims';   file = 'scripts/smoke-claims.mjs';   port = 3125 }
 )
 
 $results = @()
