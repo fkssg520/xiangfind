@@ -1,0 +1,46 @@
+# 湘寻 · systemd 服务
+# 放到 /etc/systemd/system/xiangfind.service，然后：
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now xiangfind
+# 查看日志：sudo journalctl -u xiangfind -f
+
+[Unit]
+Description=XiangFind - 校园失物招领平台
+Documentation=https://github.com/fkssg520/xiangfind
+After=network.target
+
+[Service]
+Type=simple
+User=xiangfind
+Group=xiangfind
+WorkingDirectory=/opt/xiangfind
+
+# 所有密钥走 .env，不要写在这里
+EnvironmentFile=/opt/xiangfind/.env
+Environment=NODE_ENV=production
+
+ExecStart=/usr/bin/node src/server.js
+# 异常退出 3 秒后重启；正常停机不重启
+Restart=always
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+# 安全加固：只给必要的写权限
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/xiangfind/data /opt/xiangfind/uploads
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+# 日志走 journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=xiangfind
+
+[Install]
+WantedBy=multi-user.target

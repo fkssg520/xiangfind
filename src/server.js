@@ -1,7 +1,7 @@
 // 湘寻 · 服务入口
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statfsSync } from 'node:fs';
 import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
@@ -121,13 +121,31 @@ async function route(req, res) {
   const path = url.pathname;
 
   if (path === '/health') {
-    return json(res, 200, {
-      status: 'ok',
+    // 只返回服务/数据库/磁盘状态，不暴露任何敏感信息
+    let dbStatus = 'ok';
+    let itemCount = null;
+    try {
+      itemCount = db.prepare('SELECT COUNT(*) AS c FROM items').get().c;
+    } catch {
+      dbStatus = 'error';
+    }
+    let diskFreeMB = null;
+    try {
+      const st = statfsSync(DB_PATH);
+      diskFreeMB = Math.round((st.bavail * st.bsize) / 1024 / 1024);
+    } catch {
+      diskFreeMB = null;
+    }
+    return json(res, dbStatus === 'ok' ? 200 : 503, {
+      status: dbStatus === 'ok' ? 'ok' : 'degraded',
       service: 'xiangfind',
       version: '0.1.0',
       uptime: Math.round(process.uptime()),
       time: new Date().toISOString(),
-      database: existsSync(DB_PATH) ? 'ok' : 'missing',
+      database: dbStatus,
+      items: itemCount,
+      diskFreeMB,
+      uploads: existsSync(uploadsDir()) ? 'ok' : 'missing',
     });
   }
 
