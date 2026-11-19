@@ -462,3 +462,39 @@ main { max-width: var(--page-max); margin: 0 auto; padding: var(--s-32) var(--s-
   .me-head .btn { width: 100%; }
   .me-row, .msg-row { padding: 12px 14px; }
 }
+/* ---------- 管理后台 ---------- */
+.admin-page { display: flex; flex-direction: column; gap: var(--s-16); }
+.admin-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.admin-kpi {
+  background: var(--color-cream-card); border: 1px solid var(--line);
+  border-radius: var(--radius-cards); padding: 16px 18px; box-shadow: var(--shadow-warm);
+}
+.admin-kpi span { font-size: 12.5px; color: var(--color-earth-brown); }
+.admin-kpi b { display: block; margin-top: 6px; font-size: 26px; line-height: 1.1; letter-spacing: .5px; }
+.admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.admin-table-wrap {
+  background: var(--color-cream-card); border: 1px solid var(--line);
+  border-radius: var(--radius-cards); overflow: hidden; box-shadow: var(--shadow-warm);
+}
+.admin-table th {
+  text-align: left; font-size: 12px; font-weight: 700; color: var(--color-earth-brown);
+  padding: 10px 14px; background: rgba(212,163,115,.12); border-bottom: 1px solid var(--line);
+}
+.admin-table td { padding: 11px 14px; border-bottom: 1px solid rgba(220,229,223,.6); vertical-align: middle; }
+.admin-table tr:last-child td { border-bottom: 0; }
+.admin-table .t { font-weight: 600; }
+.admin-table .sub { font-size: 11.5px; color: var(--color-earth-brown); opacity: .8; }
+.admin-act { font-size: 12.5px; font-weight: 700; color: var(--color-terracotta); cursor: pointer; margin-right: 10px; }
+.admin-act.muted { color: var(--color-earth-brown); opacity: .75; }
+.admin-tabs { display: inline-flex; padding: 3px; background: rgba(212,163,115,.18); border-radius: var(--radius-buttons); align-self: flex-start; }
+.admin-tabs button {
+  padding: 7px 18px; border: 0; border-radius: 6px; background: transparent;
+  font-family: inherit; font-size: 13px; color: var(--color-earth-brown); cursor: pointer;
+}
+.admin-tabs button.on { background: var(--color-cream-card); color: var(--color-terracotta); font-weight: 700; box-shadow: 0 1px 3px rgba(181,101,74,.12); }
+
+@media (max-width: 760px) {
+  .admin-table th:nth-child(4), .admin-table td:nth-child(4),
+  .admin-table th:nth-child(5), .admin-table td:nth-child(5) { display: none; }
+}
+

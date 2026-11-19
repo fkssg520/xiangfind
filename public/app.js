@@ -49,6 +49,7 @@ function renderRoute() {
   if (name === 'item') loadDetail(param);
   if (name === 'me') loadMe(param);
   if (name === 'messages') loadMessages();
+  if (name === 'admin') loadAdmin(param);
 
   window.scrollTo(0, 0);
 }
@@ -870,4 +871,173 @@ async function loadUnread() {
   } catch {
     setUnread(0);
   }
+}
+
+/* ---------- 管理后台 ---------- */
+const ADMIN_KPIS = [
+  ['users', '注册用户'],
+  ['volunteers', '志愿者'],
+  ['items', '信息总数'],
+  ['inProgress', '进行中'],
+  ['pendingStorage', '待入库'],
+  ['pendingClaims', '待审认领'],
+  ['returned', '已归还'],
+  ['unreadMessages', '未读消息'],
+];
+
+async function loadAdmin(tab) {
+  const root = document.getElementById('admin-root');
+  if (!root) return;
+  root.replaceChildren(el('div', 'skeleton'));
+
+  const meRes = await api('/me');
+  if (!meRes.ok) {
+    root.replaceChildren(emptyBox('请先登录后再进入后台'));
+    location.hash = '#/login';
+    return;
+  }
+  if (meRes.data.user.role !== 'admin') {
+    root.replaceChildren(emptyBox('这个页面需要管理员权限'));
+    return;
+  }
+
+  const page = el('div', 'admin-page');
+  const tabs = el('div', 'admin-tabs');
+  const pane = el('div', 'admin-pane');
+
+  const TABS = [['overview', '概览'], ['items', '信息'], ['users', '用户'], ['points', '存放点']];
+  const show = (key) => {
+    [...tabs.children].forEach((b) => b.classList.toggle('on', b.dataset.tab === key));
+    pane.replaceChildren(el('div', 'skeleton'));
+    renderAdminPane(key, pane);
+  };
+  TABS.forEach(([key, label], i) => {
+    const b = el('button', i === 0 ? 'on' : '', label);
+    b.type = 'button'; b.dataset.tab = key;
+    b.addEventListener('click', () => show(key));
+    tabs.append(b);
+  });
+
+  page.append(tabs, pane);
+  root.replaceChildren(page);
+  show(['overview', 'items', 'users', 'points'].includes(tab) ? tab : 'overview');
+}
+
+async function renderAdminPane(key, pane) {
+  try {
+    if (key === 'overview') {
+      const r = await api('/admin/overview');
+      if (!r.ok) return pane.replaceChildren(emptyBox('概览加载失败'));
+      const grid = el('div', 'admin-kpis');
+      ADMIN_KPIS.forEach(([k, label]) => {
+        const box = el('div', 'admin-kpi');
+        box.append(el('span', null, label));
+        box.append(el('b', null, String(r.data[k] ?? 0)));
+        grid.append(box);
+      });
+      pane.replaceChildren(grid);
+      return;
+    }
+
+    if (key === 'items') {
+      const r = await api('/admin/items?status=' + encodeURIComponent('all'));
+      if (!r.ok) return pane.replaceChildren(emptyBox('信息列表加载失败'));
+      const rows = r.data.items || [];
+      if (!rows.length) return pane.replaceChildren(emptyBox('还没有信息'));
+
+      const wrap = el('div', 'admin-table-wrap');
+      const table = el('table', 'admin-table');
+      const head = document.createElement('tr');
+      ['信息', '类型', '状态', '地点', '发布者', '操作'].forEach((t) => head.append(el('th', null, t)));
+      table.append(head);
+
+      rows.forEach((it) => {
+        const tr = document.createElement('tr');
+        const tdTitle = document.createElement('td');
+        tdTitle.append(el('div', 't', it.title || '未命名'));
+        tdTitle.append(el('div', 'sub', it.category || ''));
+        tr.append(tdTitle);
+        tr.append(el('td', null, it.type === 'lost' ? '失物' : '招领'));
+        const tdStatus = document.createElement('td');
+        const table2 = STATUS_MAP[it.type] || {};
+        const [label, tone] = table2[it.status] || [it.status, 'muted'];
+        tdStatus.append(el('span', `status ${tone}`, label));
+        tr.append(tdStatus);
+        tr.append(el('td', 'sub', it.location || ''));
+        tr.append(el('td', 'sub', it.author?.name || ''));
+
+        const tdAct = document.createElement('td');
+        if (it.status === 'pending_storage') {
+          const ok = el('span', 'admin-act', '确认入库');
+          ok.addEventListener('click', () => patchAdminItem(it.id, 'stored', pane));
+          tdAct.append(ok);
+        }
+        const down = el('span', 'admin-act muted', '下架');
+        down.addEventListener('click', () => patchAdminItem(it.id, 'archived', pane));
+        tdAct.append(down);
+        tr.append(tdAct);
+
+        table.append(tr);
+      });
+      wrap.append(table);
+      pane.replaceChildren(wrap);
+      return;
+    }
+
+    if (key === 'users') {
+      const r = await api('/admin/users');
+      if (!r.ok) return pane.replaceChildren(emptyBox('用户列表加载失败'));
+      const rows = r.data.users || [];
+      const wrap = el('div', 'admin-table-wrap');
+      const table = el('table', 'admin-table');
+      const head = document.createElement('tr');
+      ['姓名', '学号', '角色', '状态', '发布数'].forEach((t) => head.append(el('th', null, t)));
+      table.append(head);
+      rows.forEach((u) => {
+        const tr = document.createElement('tr');
+        tr.append(el('td', 't', u.name || ''));
+        tr.append(el('td', 'sub', u.studentId || ''));
+        tr.append(el('td', 'sub', ROLE_TEXT[u.role] || u.role));
+        tr.append(el('td', 'sub', u.status || ''));
+        tr.append(el('td', 'sub', String(u.itemCount ?? '')));
+        table.append(tr);
+      });
+      wrap.append(table);
+      pane.replaceChildren(wrap);
+      return;
+    }
+
+    const r = await api('/admin/storage-points');
+    if (!r.ok) return pane.replaceChildren(emptyBox('存放点加载失败'));
+    const rows = r.data.storagePoints || [];
+    const wrap = el('div', 'admin-table-wrap');
+    const table = el('table', 'admin-table');
+    const head = document.createElement('tr');
+    ['名称', '类型', '地址', '时间', '状态'].forEach((t) => head.append(el('th', null, t)));
+    table.append(head);
+    rows.forEach((p) => {
+      const tr = document.createElement('tr');
+      tr.append(el('td', 't', p.name || ''));
+      tr.append(el('td', 'sub', p.type === 'security' ? '保卫处' : '普通'));
+      tr.append(el('td', 'sub', p.address || ''));
+      tr.append(el('td', 'sub', p.hours || ''));
+      tr.append(el('td', 'sub', p.enabled === 0 ? '停用' : '启用'));
+      table.append(tr);
+    });
+    wrap.append(table);
+    pane.replaceChildren(wrap);
+  } catch (err) {
+    console.warn('[湘寻] 后台加载失败：', err.message);
+    pane.replaceChildren(emptyBox('加载失败，稍后再试'));
+  }
+}
+
+async function patchAdminItem(id, status, pane) {
+  const r = await api('/items/' + encodeURIComponent(id), { method: 'PATCH', body: { status } });
+  if (!r.ok) {
+    toast(errText(r, '操作失败'));
+    return;
+  }
+  toast(status === 'stored' ? '已确认入库' : '已下架');
+  renderAdminPane('items', pane);
 }
