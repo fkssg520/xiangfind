@@ -20,6 +20,10 @@ async function boot(hash) {
   return { d: frame.contentDocument, w: frame.contentWindow };
 }
 
+  // headless 下原生 confirm/alert 会阻塞，统一打桩
+  frame.contentWindow.confirm = () => true;
+  frame.contentWindow.alert = () => {};
+
 async function login(d, w, studentId, password) {
   w.location.hash = '#/login';
   await wait(800);

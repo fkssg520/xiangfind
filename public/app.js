@@ -961,7 +961,11 @@ async function renderAdminPane(key, pane) {
         box.append(el('b', null, String(r.data[k] ?? 0)));
         grid.append(box);
       });
-      pane.replaceChildren(grid);
+      const bar = el('div', 'admin-bar');
+      bar.append(adminAct('+ 群发系统消息', () => openBroadcastDialog(pane)));
+      const box = el('div', 'admin-page');
+      box.append(grid, bar);
+      pane.replaceChildren(box);
       return;
     }
 
@@ -1045,6 +1049,7 @@ async function renderAdminPane(key, pane) {
           } else {
             acts.append(adminAct('设为志愿者', () => openVolunteerDialog(u, pane)));
           }
+          acts.append(adminAct('重置密码', () => adminResetPassword(u, pane)));
           if (u.id === me?.id || isAdminRow) {
             acts.append(adminAct('停用', () => {}, true));
           } else if (u.status === 'disabled') {
@@ -1363,3 +1368,110 @@ async function decideClaim(claimId, decision, itemId) {
   if (itemId) loadDetail(itemId);
 }
 
+/* ---------- P2：重置密码 + 群发消息 ---------- */
+async function adminResetPassword(user, pane) {
+  if (!confirm(`给「${user.name || user.studentId}」发送重置密码邮件？\n验证码 15 分钟内有效。`)) return;
+  const r = await api('/admin/users/' + encodeURIComponent(user.id) + '/reset-password', { method: 'POST' });
+  if (!r.ok) {
+    toast(errText(r, '发送失败'));
+    return;
+  }
+  const d = r.data || {};
+  if (d.delivery === 'log') {
+    toast('已生成验证码（开发环境：见服务端日志）');
+  } else if (d.cooldown) {
+    toast(`刚发过，请 ${d.cooldown} 秒后再试`);
+  } else {
+    toast('重置邮件已发送');
+  }
+  renderAdminPane('users', pane);
+}
+
+async function adminCountRecipients(role) {
+  const r = await api('/admin/users');
+  if (!r.ok) return null;
+  const list = (r.data.users || []).filter((u) => u.status !== 'disabled');
+  if (role === 'all') return list.length;
+  return list.filter((u) => u.role === role).length;
+}
+
+function openBroadcastDialog(pane) {
+  const mask = el('div', 'modal-mask');
+  const box = el('div', 'modal');
+  box.append(el('h3', null, '群发系统消息'));
+  box.append(el('p', 'modal-hint', '会以「系统消息」的形式进入每个收件人的消息中心，已停用的账号不会收到。'));
+
+  const roleWrap = el('label', 'field');
+  roleWrap.append(el('span', null, '收件人'));
+  const roleSel = document.createElement('select');
+  roleSel.className = 'input';
+  [['all', '全部用户'], ['student', '仅学生'], ['volunteer', '仅志愿者'], ['admin', '仅管理员']].forEach(([v, t]) => {
+    const o = document.createElement('option');
+    o.value = v; o.textContent = t; roleSel.append(o);
+  });
+  roleWrap.append(roleSel);
+  box.append(roleWrap);
+
+  const titleWrap = el('label', 'field');
+  titleWrap.append(el('span', null, '标题'));
+  const titleInput = document.createElement('input');
+  titleInput.className = 'input';
+  titleInput.placeholder = '1-60 字';
+  titleWrap.append(titleInput);
+  box.append(titleWrap);
+
+  const bodyWrap = el('label', 'field');
+  bodyWrap.append(el('span', null, '正文'));
+  const bodyInput = document.createElement('textarea');
+  bodyInput.className = 'input area';
+  bodyInput.placeholder = '1-1000 字';
+  bodyWrap.append(bodyInput);
+  box.append(bodyWrap);
+
+  const count = el('p', 'modal-hint');
+  count.textContent = '正在统计收件人…';
+  box.append(count);
+
+  const msg = el('p', 'auth-msg');
+  msg.hidden = true;
+  box.append(msg);
+
+  const acts = el('div', 'modal-actions');
+  const cancel = el('button', 'btn btn-ghost', '取消');
+  cancel.type = 'button';
+  const submit = el('button', 'btn', '发送');
+  submit.type = 'button';
+  acts.append(cancel, submit);
+  box.append(acts);
+  mask.append(box);
+  document.body.append(mask);
+
+  const close = () => mask.remove();
+  cancel.addEventListener('click', close);
+  mask.addEventListener('click', (e) => { if (e.target === mask) close(); });
+
+  const refreshCount = async () => {
+    const n = await adminCountRecipients(roleSel.value);
+    count.textContent = n === null ? '收件人统计失败，仍可发送' : `将发送给 ${n} 人`;
+  };
+  roleSel.addEventListener('change', refreshCount);
+  refreshCount();
+
+  submit.addEventListener('click', async () => {
+    const title = titleInput.value.trim();
+    const text = bodyInput.value.trim();
+    if (title.length < 1 || title.length > 60) { msg.hidden = false; msg.textContent = '标题需 1-60 字'; return; }
+    if (text.length < 1 || text.length > 1000) { msg.hidden = false; msg.textContent = '正文需 1-1000 字'; return; }
+    if (!confirm(`确定发送「${title}」给 ${count.textContent.replace('将发送给 ', '')} 吗？`)) return;
+
+    submit.disabled = true;
+    submit.textContent = '发送中…';
+    const r = await api('/admin/messages', { method: 'POST', body: { role: roleSel.value, title, body: text } });
+    submit.disabled = false;
+    submit.textContent = '发送';
+    if (!r.ok) { msg.hidden = false; msg.textContent = errText(r, '发送失败'); return; }
+    close();
+    toast(`已发送给 ${r.data.recipients} 人`);
+    renderAdminPane('overview', pane);
+  });
+}
