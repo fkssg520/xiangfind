@@ -216,7 +216,9 @@ export function confirmReturn(db, itemId, viewer, ) {
   }
 
   const now = nowIso();
-  db.prepare('UPDATE items SET status = ?, updated_at = ? WHERE id = ?').run(STATUS_AFTER_RETURN, now, itemId);
+  // 计划书 §2.2：归还记录要记录完成时间
+  db.prepare('UPDATE items SET status = ?, returned_at = ?, updated_at = ? WHERE id = ?')
+    .run(STATUS_AFTER_RETURN, now, now, itemId);
   const approved = db.prepare("SELECT applicant_id FROM claims WHERE item_id = ? AND status = 'approved'").get(itemId);
   if (approved) notify(db, approved.applicant_id, '物品已归还', `「${item.title}」已完成归还，感谢使用湘寻。`, itemId);
 

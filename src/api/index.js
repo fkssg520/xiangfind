@@ -4,11 +4,12 @@ import { Readable } from 'node:stream';
 import { saveUpload, MAX_FILES } from '../services/uploads.js';
 import { hit } from '../lib/ratelimit.js';
 import { submitClaim, decideClaim, confirmReturn, listClaims } from '../services/claims.js';
+import { listMatches } from '../services/matching.js';
 import { verifyCsrf } from '../lib/csrf.js';
 import {
   SESSION_COOKIE, SESSION_TTL_MS, createSession, destroySession, getSessionUser,
 } from '../lib/session.js';
-import { register, resendCode, verifyEmail, login, publicUser } from '../services/auth.js';
+import { register, resendCode, verifyEmail, login, publicUser, forgotPassword, resetPassword } from '../services/auth.js';
 import { listItems, getItem, createItem, patchItem, toggleFavorite } from '../services/items.js';
 
 const WRITE_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
@@ -163,6 +164,20 @@ export async function handleApi(req, res, ctx) {
     return true;
   }
 
+  // POST /api/auth/forgot-password
+  if (path === '/api/auth/forgot-password' && req.method === 'POST') {
+    const out = await forgotPassword(db, body, ip);
+    json(res, out.status, out.body);
+    return true;
+  }
+
+  // POST /api/auth/reset-password
+  if (path === '/api/auth/reset-password' && req.method === 'POST') {
+    const out = resetPassword(db, body);
+    json(res, out.status, out.body);
+    return true;
+  }
+
   // POST /api/auth/logout
   if (path === '/api/auth/logout' && req.method === 'POST') {
     const cookies = (req.headers.cookie || '').match(new RegExp(`${SESSION_COOKIE}=([^;]+)`));
@@ -240,6 +255,35 @@ export async function handleApi(req, res, ctx) {
   if (favMatch && req.method === 'POST') {
     if (!requireUser(res, viewer)) return true;
     const out = toggleFavorite(db, favMatch[1], viewer);
+    json(res, out.status, out.body);
+    return true;
+  }
+
+  // GET /api/storage-points（公开：发布页要用，不登录也能拿到选项）
+  if (path === '/api/storage-points' && req.method === 'GET') {
+    if (!anonLimit()) return true;
+    const list = db
+      .prepare('SELECT id, name, type, address, hours, note FROM storage_points WHERE enabled = 1 ORDER BY sort_order, name')
+      .all();
+    json(res, 200, { storagePoints: list });
+    return true;
+  }
+
+  // GET /api/matches/:itemId（匹配摘要，登录可看）
+  const matchList = path.match(/^\/api\/matches\/([A-Za-z0-9_-]+)$/);
+  if (matchList && req.method === 'GET') {
+    if (!requireUser(res, viewer)) return true;
+    const item = db.prepare('SELECT id, user_id FROM items WHERE id = ?').get(matchList[1]);
+    if (!item) return fail(res, 404, 'not_found', '物品不存在'), true;
+    json(res, 200, { matches: listMatches(db, matchList[1], 5) });
+    return true;
+  }
+
+  // POST /api/items/:id/storage-confirm（契约里的专用端点，等价于 PATCH status=stored）
+  const storageConfirmMatch = path.match(/^\/api\/items\/([A-Za-z0-9_-]+)\/storage-confirm$/);
+  if (storageConfirmMatch && req.method === 'POST') {
+    if (!requireUser(res, viewer)) return true;
+    const out = patchItem(db, storageConfirmMatch[1], { viewer, body: { status: 'stored' } });
     json(res, out.status, out.body);
     return true;
   }
