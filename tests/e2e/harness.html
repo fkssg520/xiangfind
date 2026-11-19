@@ -61,6 +61,38 @@ const SCENARIOS = {
     return { canClaim: true, modal: Boolean(d.querySelector('.modal-mask')) };
   },
 
+
+  async publish() {
+    const { d, w } = await boot('#/login');
+    await login(d, w, '20230001', 'demo1234');
+    w.location.hash = '#/publish';
+    await wait(1500);
+
+    const form = d.getElementById('form-publish');
+    // 招领：切到 found，存放点必填
+    d.querySelector('#pub-type button[data-type="found"]').click();
+    await wait(300);
+    const stamp = String(Date.now()).slice(-6);
+    form.elements.title.value = 'E2E 测试雨伞 ' + stamp;
+    form.elements.category.value = '其他';
+    form.elements.location.value = '第三教学楼 101';
+    form.elements.description.value = '自动化测试创建：蓝色折叠伞，伞柄有黄色手绳，伞面有一处补丁。';
+    await wait(300);
+
+    const pointSel = form.elements.storagePointId;
+    if (pointSel && pointSel.options.length > 1) pointSel.selectedIndex = 1;
+
+    form.dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
+    await wait(2500);
+
+    return {
+      stamp,
+      hash: w.location.hash,
+      moved: w.location.hash.startsWith('#/item/'),
+      title: d.querySelector('.detail-head h1')?.textContent || '',
+    };
+  },
+
   async admin() {
     const { d, w } = await boot('#/login');
     await login(d, w, '90000001', 'demo1234');

@@ -10,7 +10,7 @@
 # 前置：应用已起在 $env:BASE（默认 http://127.0.0.1:3000），且执行过 db:migrate + db:seed。
 
 param(
-    [string[]]$Scenarios = @('login', 'plaza', 'detail', 'claim', 'admin', 'forbidden')
+    [string[]]$Scenarios = @('login', 'plaza', 'detail', 'claim', 'publish', 'admin', 'forbidden')
 )
 
 $ErrorActionPreference = 'Continue'
@@ -82,6 +82,7 @@ try {
                 'plaza'     { $ok = ([int]$r.cards -gt 0) }
                 'detail'    { $ok = ($r.title -and [int]$r.rows -ge 5) }
                 'claim'     { $ok = ($r.modal -eq $true) }
+                'publish'   { $ok = ($r.moved -eq $true -and $r.title -like '*E2E*') }
                 'admin'     { $ok = ($r.tabs.Count -eq 5 -and [int]$r.kpis -gt 0) }
                 'forbidden' { $ok = ($r.guarded -eq $true) }
                 default     { $ok = $true }
