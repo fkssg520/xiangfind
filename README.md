@@ -95,6 +95,30 @@ deploy/         nginx / systemd / 部署清单
 journal/        每日交接日志
 ```
 
+## 部署
+
+两条路线，都准备好了：
+
+| 路线 | 成本 | 上线时间 | 适合 | 文档 |
+|---|---|---|---|---|
+| **A. Ubuntu 云服务器** | ¥25-60/月 | 1-2 小时 | 演示后长期用 | [`deploy/DEPLOY.md`](deploy/DEPLOY.md) |
+| **B. Cloudflare 隧道** | 免费 | 10 分钟 | 11/23 演示当天 | [`deploy/TUNNEL.md`](deploy/TUNNEL.md) |
+
+```powershell
+# 路线 B 一键起（先 npm start 把服务跑起来）
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/tunnel-up.ps1
+```
+
+> 两者不冲突：可以先用 B 应付演示，之后再迁到 A。迁移只换 `PUBLIC_BASE_URL` 和 nginx，代码不动。
+
+部署前自检：
+
+```powershell
+node scripts/check-secrets.mjs    # 确认没有密钥/真实个人信息被提交
+node scripts/mail-check.mjs       # 确认 SMTP 配置（不带参数只校验完整性）
+powershell -File scripts/restore-drill.ps1   # 备份恢复演练
+```
+
 ## 已知限制
 
 | 项 | 说明 |

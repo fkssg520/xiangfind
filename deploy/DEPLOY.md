@@ -1,7 +1,8 @@
 # 部署清单（Ubuntu + Nginx + systemd）
 
 > 状态：**方案待人类拍板**（见文末「两条路线」）。
-> 本文档按「一台 Ubuntu 云服务器 + 域名 + HTTPS」写；用隧道方案的话跳过 §3-§6。
+> 本文档按「一台 Ubuntu 云服务器 + 域名 + HTTPS」写。
+> **没有服务器、想今天就拿到公网地址 → 看 [`TUNNEL.md`](TUNNEL.md)（Cloudflare 隧道，免费，10 分钟）。**
 
 ---
 
