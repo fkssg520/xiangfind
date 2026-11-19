@@ -1,22 +1,10 @@
 // 湘寻 · 前端入口
-// 当前阶段：单页外壳 + 广场页（mock 数据）
+// 当前阶段：全部页面已接真实 /api/*，mock 仅作字段参考
 // 契约：docs/API契约.md　样例：docs/fixtures/items.json
-// 切换真实接口时只改 API_PREFIX，不改字段映射。
+// 数据全部来自 /api/*；mock 只保留在 public/mock 作为字段参考。
 
 let currentUser = null; // 当前登录用户（null = 未登录）
 
-// 存放点目前没有列表接口，先用与 seed 一致的常量；等 GET /api/storage-points 就绪后替换
-const STORAGE_POINTS = [
-  { id: 'stp_demo_lib', name: '图书馆一楼服务台', type: 'normal' },
-  { id: 'stp_demo_dorm', name: '宿舍服务中心', type: 'normal' },
-  { id: 'stp_demo_guard', name: '保卫处失物招领点', type: 'security' },
-];
-const API_PREFIX = ''; // 例：'' = 同源；'/api' = 后端前缀。mock 阶段留空。
-const MOCK = {
-  items: 'mock/items.json',
-  detail: 'mock/item-detail.json',
-  me: 'mock/me.json',
-};
 
 /* ---------- 状态码 → 徽章（按 D-001 的 type + status 双维度） ---------- */
 const STATUS_MAP = {
@@ -289,18 +277,11 @@ async function loadDetail(id) {
   if (!root) return;
   root.replaceChildren(el('div', 'skeleton'));
 
-  let data = null;
-  try {
-    const res = await fetch(`${API_PREFIX}${MOCK.detail}`, { headers: { accept: 'application/json' } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    data = await res.json();
-  } catch (err) {
-    console.warn('[湘寻] 详情 mock 加载失败：', err.message);
-    root.replaceChildren(el('div', 'empty', '详情加载失败，稍后再试。'));
-    return;
-  }
+  const r = await api('/items/' + encodeURIComponent(id));
+  if (r.status === 404) { root.replaceChildren(el('div', 'empty', '这条信息不存在或已删除。')); return; }
+  if (!r.ok) { root.replaceChildren(el('div', 'empty', '详情加载失败，稍后再试。')); return; }
 
-  root.replaceChildren(buildDetail(data, id));
+  root.replaceChildren(buildDetail(r.data.item, id));
 }
 
 function buildDetail(item, id) {
@@ -574,9 +555,14 @@ function bindPublish() {
   const valueSel = form.elements.valueLevel;
   const msg = document.getElementById('pub-msg');
 
-  function refreshPoints() {
+  let pointsCache = null;
+  async function refreshPoints() {
+    if (!pointsCache) {
+      const r = await api('/storage-points');
+      pointsCache = r.ok ? (r.data.storagePoints || []) : [];
+    }
     const valuable = valueSel.value === 'valuable';
-    const list = STORAGE_POINTS.filter((p) => !valuable || p.type === 'security');
+    const list = pointsCache.filter((p) => !valuable || p.type === 'security');
     storageSel.replaceChildren();
     list.forEach((p) => {
       const opt = document.createElement('option');
@@ -769,9 +755,9 @@ async function renderPane(key, pane) {
       return;
     }
 
-    const res = await fetch('/mock/items.json');
-    const data = await res.json();
-    const favs = (data.items || []).filter((i) => i.isFavorited);
+    const r = await api('/items?fav=1&pageSize=50');
+    if (!r.ok || r.data?.requiresLogin) return pane.replaceChildren(emptyBox('请先登录后查看我的收藏'));
+    const favs = r.data.items || [];
     if (!favs.length) return pane.replaceChildren(emptyBox('还没有收藏任何信息'));
     const grid = el('div', 'grid');
     favs.forEach((it) => grid.append(cardOf(it)));
@@ -785,6 +771,8 @@ async function renderPane(key, pane) {
 /* ---------- 消息中心 ---------- */
 const MSG_TEXT = { match: '匹配', claim: '认领', system: '系统' };
 
+// 已读语义（刻意如此，不是 bug）：进页面**不**自动标已读；
+// 点开单条 → 本地即时标记 + POST /api/messages/:id/read；「全部标为已读」逐条 POST。
 async function loadMessages() {
   const root = document.getElementById('messages-root');
   if (!root) return;
