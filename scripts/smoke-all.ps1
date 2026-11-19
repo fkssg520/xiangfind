@@ -16,14 +16,23 @@ $suites = @(
 
 $results = @()
 
+# 0) 前端 DOM 契约（不需要起服务）
+Write-Host ''
+Write-Host '===== dom =====' -ForegroundColor Cyan
+$domOut = & node scripts/check-dom.mjs 2>&1
+$domOut | ForEach-Object { Write-Host $_ }
+$domLine = ($domOut | Select-String -Pattern '^结果：').Line
+$results += [pscustomobject]@{ 套件 = 'dom'; 结果 = $domLine }
+
 foreach ($s in $suites) {
-    $dbName = "data\/smoke-$($s.name).db"
     $dbPath = Join-Path $repoRoot "data/smoke-$($s.name).db"
     $logPath = Join-Path $repoRoot "smoke-$($s.name).log"
+
     Remove-Item "$dbPath*" -Force -ErrorAction SilentlyContinue
     Remove-Item $logPath -Force -ErrorAction SilentlyContinue
     if (Test-Path (Join-Path $repoRoot 'uploads')) {
-        Get-ChildItem (Join-Path $repoRoot 'uploads') -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+        Get-ChildItem (Join-Path $repoRoot 'uploads') -File -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
     }
 
     $env:DATABASE_PATH = $dbPath
@@ -35,9 +44,8 @@ foreach ($s in $suites) {
     & node src/db/migrate.js 2>&1 | Out-Null
     & node src/db/seed.js 2>&1 | Out-Null
 
-    $proc = Start-Process -FilePath 'node' -ArgumentList 'src/server.js' `
-        -WorkingDirectory $repoRoot -WindowStyle Hidden `
-        -RedirectStandardOutput $logPath -RedirectStandardError "$logPath.err" -PassThru
+    $errPath = "$logPath.err"
+    $proc = Start-Process -FilePath 'node' -ArgumentList 'src/server.js' -WorkingDirectory $repoRoot -WindowStyle Hidden -RedirectStandardOutput $logPath -RedirectStandardError $errPath -PassThru
     Start-Sleep -Seconds 2
 
     Write-Host ''
@@ -57,8 +65,11 @@ Write-Host '===== 汇总 =====' -ForegroundColor Cyan
 $results | Format-Table -AutoSize | Out-String -Width 100 | Write-Host
 
 # 清理临时产物
-Get-ChildItem (Join-Path $repoRoot 'data') -Filter 'smoke-*.db*' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
-Get-ChildItem $repoRoot -Filter 'smoke-*.log*' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
-Get-ChildItem (Join-Path $repoRoot 'uploads') -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+Get-ChildItem (Join-Path $repoRoot 'data') -Filter 'smoke-*.db*' -ErrorAction SilentlyContinue |
+    Remove-Item -Force -ErrorAction SilentlyContinue
+Get-ChildItem $repoRoot -Filter 'smoke-*.log*' -ErrorAction SilentlyContinue |
+    Remove-Item -Force -ErrorAction SilentlyContinue
+Get-ChildItem (Join-Path $repoRoot 'uploads') -File -ErrorAction SilentlyContinue |
+    Remove-Item -Force -ErrorAction SilentlyContinue
 
 Pop-Location
