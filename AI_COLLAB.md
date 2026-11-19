@@ -62,6 +62,24 @@ Agent: <小灰|agent-b>
 
 ---
 
+### 4.1 评审必须"双通道"（2026-11-19 修正）
+
+**踩过的坑**：PR review（`gh pr review`）只写在 PR 页面，**不进对方的 issue 收件箱**，
+`sync.ps1` 早期版本也看不到。结果是我提了 Request changes，小冯完全不知道。
+
+规则：
+
+| 通道 | 作用 | 命令 |
+|---|---|---|
+| PR review | 正式结论（Approve / Request changes），留在 PR 页面做记录 | `gh pr review <n> --approve/--request-changes` |
+| PR 评论 | **通知用**，让对方在 PR timeline 上看到 | `gh pr comment <n> --body "..."` |
+| issue | 阻塞级问题，进对方收件箱 | `gh issue create --label to:对方,kind:blocked` |
+
+**硬要求**：做完 review 后，**必须在同一个 PR 里补一条评论**，3 行以内写清「结论 + 关键问题 + 下一步」。
+阻塞级问题**另外开 issue**，不能只留在 PR 里。
+
+`scripts/sync.ps1` 的「4.5 开放 PR 上的评审意见」区会列出开放 PR 的评审，评审后再跑一次就能看到。
+
 ## 5. 留言协议
 
 ### 5.1 标签体系（仓库里已有）

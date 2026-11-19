@@ -89,6 +89,34 @@ Write-Section '4. 待我评审'
 & $gh pr list --search "review-requested:@me" --state open --limit 10 2>$null
 
 # ---------- 5. 最新交接日志 ----------
+Write-Section '4.5 开放 PR 上的评审意见'
+$openPrs = & $gh pr list --state open --limit 10 --json number,title 2>$null
+$prObjects = @()
+if ($openPrs) { $prObjects = @($openPrs | ConvertFrom-Json | Where-Object { $null -ne $_ -and $null -ne $_.number }) }
+if ($prObjects.Count -eq 0) {
+    Write-Host '没有开放 PR。'
+} else {
+    $shown = 0
+    foreach ($p in $prObjects) {
+        $detail = & $gh pr view $p.number --json reviews,reviewDecision 2>$null | ConvertFrom-Json
+        if ($null -eq $detail) { continue }
+        $reviews = @($detail.reviews | Where-Object { $null -ne $_ })
+        if ($reviews.Count -eq 0) { continue }
+        $shown++
+        Write-Host ("  #" + $p.number + "  " + $p.title + "   [" + $detail.reviewDecision + "]") -ForegroundColor Yellow
+        foreach ($r in $reviews) {
+            Write-Host ("    " + $r.state + "  by " + $r.author.login)
+            if ($r.body) {
+                ($r.body -split "`n") | Select-Object -First 12 | ForEach-Object { Write-Host ("      " + $_) }
+                Write-Host '      ...'
+            }
+        }
+    }
+    if ($shown -eq 0) { Write-Host '开放 PR 还没有评审意见。' }
+    Write-Host ''
+    Write-Host '  看完整评审: ' -NoNewline
+    Write-Host 'gh pr view <编号> --json reviews' -ForegroundColor DarkGray
+}
 Write-Section '5. 最新交接日志'
 $latest = Get-ChildItem (Join-Path $repoRoot 'journal') -Filter '*.md' -ErrorAction SilentlyContinue |
     Sort-Object Name -Descending | Select-Object -First 1
