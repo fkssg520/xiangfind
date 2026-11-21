@@ -13,6 +13,7 @@ import { handleApi } from './api/index.js';
 import { ensureCsrf } from './lib/csrf.js';
 import { uploadsDir, ensureUploadDir } from './services/uploads.js';
 import { mailState } from './lib/mail-state.js';
+import { isSmtpConfigured } from './lib/mailer.js';
 
 const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
 const PUBLIC_DIR = join(ROOT, 'public');
@@ -151,7 +152,9 @@ async function route(req, res) {
       items: itemCount,
       diskFreeMB,
       uploads: existsSync(uploadsDir()) ? 'ok' : 'missing',
-    mail: mailState(),
+      // configured 必须反映「当前配置」，而不是「上次发信时是否配置」；
+      // 否则刚启动、还没发过信时会误报成未配置（2026-11-21 实际踩到）
+      mail: { ...mailState(), configured: isSmtpConfigured() },
     });
   }
 

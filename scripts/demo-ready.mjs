@@ -58,6 +58,17 @@ if (typeof h.diskFreeMB === 'number') {
 // 2. 邮件通道（A-02）
 console.log('\n② 邮件通道');
 const mail = h.mail || {};
+const isLocal = /^https?:\/\/(127\.|localhost)/.test(BASE);
+// 本机才能检查依赖；远端只能看 /health 报的运行状态
+if (isLocal) {
+  try {
+    await import('nodemailer');
+    ok('nodemailer 可加载');
+  } catch {
+    no('nodemailer 未安装', 'SMTP 配了也发不出去（会静默降级成日志）',
+      '跑 npm install；注意 npm 缓存目录要在可写位置');
+  }
+}
 if (!mail.configured) {
   wa('SMTP 未配置', '验证码只会打在服务端日志', '见 docs/A-02-邮件配置.md');
 } else if (mail.lastResult === 'delivered') {
@@ -135,16 +146,20 @@ if (points.ok && (points.data?.storagePoints || []).length >= 2) {
 
 // 5. 公网地址（如果查的是隧道）
 console.log('\n⑤ 外网可达性');
-if (/^https?:\/\/(127\.|localhost)/.test(BASE)) {
+if (isLocal) {
   wa('当前查的是本机地址', '老师用手机打不开', '改成隧道地址：node scripts/demo-ready.mjs https://xxx.trycloudflare.com');
-} else {
-  ok('公网地址可访问', '本次体检就是经公网请求成功的');
   const cfg = existsSync('.env') ? readFileSync('.env', 'utf8') : '';
   const m = /^PUBLIC_BASE_URL\s*=\s*(.+)$/m.exec(cfg);
   const pub = m ? m[1].trim() : '';
-  if (!pub) wa('PUBLIC_BASE_URL 未设置', '邮件里不会带站点链接');
-  else if (pub.replace(/\/$/, '') === BASE) ok('PUBLIC_BASE_URL 与当前地址一致');
-  else wa('PUBLIC_BASE_URL 与当前地址不一致', `配置的是 ${pub}`, '改 .env 后重启服务，否则邮件链接指向旧地址');
+  if (!pub) wa('本机 PUBLIC_BASE_URL 未设置', '邮件里不会带站点链接');
+  else if (pub.replace(/\/$/, '') === BASE) ok('本机 PUBLIC_BASE_URL 与当前地址一致');
+  else wa('本机 PUBLIC_BASE_URL 与当前地址不一致', `配置的是 ${pub}`, '改 .env 后重启服务，否则邮件链接指向旧地址');
+} else {
+  ok('公网地址可访问', '本次体检就是经公网请求成功的');
+  // 注意：远端服务的 PUBLIC_BASE_URL 在它自己的 .env 里，本机文件与它无关。
+  // 早先版本在这里读本地 .env 做比对，会把别人的正确配置误报成不一致。
+  console.log('  · 服务端的 PUBLIC_BASE_URL 需在**那台机器**上确认（本机 .env 与它无关）');
+  console.log('    在服务器上跑同一脚本会替你比对：node scripts/demo-ready.mjs');
 }
 
 console.log(`\n结果：通过 ${pass}，警告 ${warn}，失败 ${fail}`);
