@@ -1025,8 +1025,8 @@ async function renderPane(key, pane) {
         const table = STATUS_MAP[it.type] || {};
         const [label, tone] = table[it.status] || [it.status, 'muted'];
         row.append(el('span', `status ${tone}`, label));
-        // 编辑：未归档、未归还的都允许改标题/地点/描述
-        if (it.status !== 'archived' && it.status !== 'returned') {
+        // 编辑内容只允许在「待存放 / 进行中」阶段（后端 patchItem 的 locked 规则：入库后关键信息不能改）
+        if (it.status === 'pending_storage' || it.status === 'open') {
           const edit = el('span', 'admin-act', '编辑');
           edit.addEventListener('click', (e) => {
             e.stopPropagation();
