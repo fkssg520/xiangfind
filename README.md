@@ -72,6 +72,7 @@ npm run dev                          # 或 npm start
 | `scripts\demo-check.mjs` | 演示路径彩排（19 步，30 秒） |
 | `scripts\bench.mjs` | 容量基线（灌数据测列表/搜索/详情延迟） |
 | `scripts\clean-test-data.mjs` | 清理 E2E 残留数据（默认预演） |
+| `scripts\clean-demo-users.mjs` | 清理非演示账号（默认预演，演示账号永不删） |
 
 ## 接口一览
 
