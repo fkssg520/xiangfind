@@ -6,7 +6,11 @@
 param(
     [int]$Port = 3000,
     [string]$Name = '',
-    [string]$Cloudflared = ''
+    [string]$Cloudflared = '',
+    # 传输协议：默认 http2（走 TCP 443）。
+    # 实测：很多校园网/公司网封 UDP，QUIC 会拿到域名却连不上边缘（日志里 UDP Connectivity FAIL）
+    [ValidateSet('http2', 'quic', 'auto')]
+    [string]$Protocol = 'http2'
 )
 
 $ErrorActionPreference = 'Continue'
@@ -62,7 +66,7 @@ if ($Name) {
     Write-Host "  固定隧道：$Name（地址不会变）" -ForegroundColor DarkGray
     Write-Host '  按 Ctrl+C 结束' -ForegroundColor DarkGray
     Write-Host ''
-    & $exe tunnel run $Name
+    & $exe tunnel --protocol $Protocol run $Name
 } else {
     Write-Host '  临时隧道（地址每次重启会变）' -ForegroundColor DarkGray
     Write-Host '  等它打印 https://xxxx.trycloudflare.com 就是公网地址' -ForegroundColor DarkGray
@@ -72,5 +76,5 @@ if ($Name) {
     Write-Host ''
     Write-Host '  按 Ctrl+C 结束' -ForegroundColor DarkGray
     Write-Host ''
-    & $exe tunnel --url "http://127.0.0.1:$Port"
+    & $exe tunnel --protocol $Protocol --url "http://127.0.0.1:$Port"
 }
