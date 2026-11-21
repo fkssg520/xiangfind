@@ -105,5 +105,52 @@ const noCsrfRes = await fetch(BASE + '/api/auth/login', {
 });
 check('缺少 CSRF 被拒 403', noCsrfRes.status === 403);
 
+// 11. 忘记密码：防枚举（不存在的邮箱也返回 200）
+const forgotUnknown = await call('POST', '/api/auth/forgot-password', { email: 'nobody-xyz@example.com' });
+check('忘记密码：不存在邮箱也 200（防枚举）', forgotUnknown.status === 200,
+  String(forgotUnknown.status));
+
+// 12. 忘记密码：格式错误 400
+const forgotBadEmail = await call('POST', '/api/auth/forgot-password', { email: 'not-an-email' });
+check('忘记密码：邮箱格式错 400', forgotBadEmail.status === 400);
+
+// 13. 忘记密码：真实账号返回 200，且响应体与"不存在邮箱"**完全一致**（防枚举）
+const forgotReal = await call('POST', '/api/auth/forgot-password', { email: account.email });
+check('忘记密码：真实邮箱 200', forgotReal.status === 200, String(forgotReal.status));
+{
+  const a = JSON.stringify(forgotUnknown.data ?? {});
+  const b = JSON.stringify(forgotReal.data ?? {});
+  check('忘记密码：响应体不泄露邮箱是否存在', a === b, a === b ? '两者一致' : `${a} ≠ ${b}`);
+  check('忘记密码：文案不承诺"一定已发送"',
+    /如果该邮箱已注册/.test(String(forgotReal.data?.message || '')),
+    String(forgotReal.data?.message || '(无 message)'));
+}
+
+// 14. 重置密码：验证码格式错 400
+const resetBadCode = await call('POST', '/api/auth/reset-password',
+  { email: account.email, code: 'abc', password: 'NewPass123', confirmPassword: 'NewPass123' });
+check('重置密码：验证码非 6 位 400', resetBadCode.status === 400);
+
+// 15. 重置密码：弱密码 400
+const resetWeak = await call('POST', '/api/auth/reset-password',
+  { email: account.email, code: '123456', password: 'short', confirmPassword: 'short' });
+check('重置密码：弱密码 400', resetWeak.status === 400);
+
+// 16. 重置密码：两次不一致 400
+const resetMismatch = await call('POST', '/api/auth/reset-password',
+  { email: account.email, code: '123456', password: 'NewPass123', confirmPassword: 'Other123' });
+check('重置密码：两次不一致 400', resetMismatch.status === 400);
+
+// 17. 重置密码：错误验证码 400/401（不能真的改掉密码）
+const resetWrongCode = await call('POST', '/api/auth/reset-password',
+  { email: account.email, code: '000000', password: 'NewPass123', confirmPassword: 'NewPass123' });
+check('重置密码：验证码错误被拒', resetWrongCode.status === 400 || resetWrongCode.status === 401,
+  String(resetWrongCode.status));
+
+// 18. 关键：错误验证码不能真的改掉密码——原密码必须仍然可登录
+const stillOld = await call('POST', '/api/auth/login',
+  { studentId: account.studentId, password: account.password });
+check('错误验证码后原密码仍可用', stillOld.status === 200, String(stillOld.status));
+
 console.log(`\n结果：通过 ${pass}，失败 ${fail}`);
 process.exit(fail === 0 ? 0 : 1);
