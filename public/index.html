@@ -50,7 +50,38 @@
         <button class="btn" id="search-btn">搜索</button>
       </div>
 
-      <div class="chips" id="cats"></div>
+        <div class="chips" id="cats"></div>
+
+        <div class="filters">
+          <label class="filter">
+            <span>状态</span>
+            <select class="input" id="f-status">
+              <option value="all">全部状态</option>
+              <option value="open">进行中</option>
+              <option value="stored">已存放</option>
+              <option value="claim_pending">认领中</option>
+              <option value="ready_for_pickup">待领取</option>
+              <option value="returned">已归还</option>
+              <option value="archived">已归档</option>
+            </select>
+          </label>
+          <label class="filter">
+            <span>贵重</span>
+            <select class="input" id="f-value">
+              <option value="all">不限</option>
+              <option value="normal">普通</option>
+              <option value="valuable">贵重</option>
+            </select>
+          </label>
+          <label class="filter">
+            <span>存放点</span>
+            <select class="input" id="f-point">
+              <option value="all">全部存放点</option>
+            </select>
+          </label>
+          <button class="btn btn-ghost btn-sm" id="f-reset" type="button">重置筛选</button>
+        </div>
+
 
       <div class="grid" id="plaza-grid"></div>
       <div class="more-wrap"><button class="btn btn-ghost" id="plaza-more" hidden>加载更多</button></div>
@@ -164,6 +195,7 @@
             <p class="auth-msg" id="login-msg" hidden></p>
             <button class="btn auth-submit" type="submit">登录</button>
             <p class="auth-hint">演示账号：20230001 / demo1234</p>
+            <p class="auth-hint"><a href="#/forgot" class="link">忘记密码？</a></p>
           </form>
 
           <form class="auth-form" id="form-register" hidden>
@@ -196,6 +228,40 @@
             <button class="auth-link" type="button" id="verify-back">换一个邮箱</button>
             <p class="auth-hint">开发环境未配 SMTP，验证码请查看服务端日志（<code>[mail:dev]</code>）。</p>
           </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- ⑧ 忘记密码 -->
+    <section class="view" id="view-forgot">
+      <div class="auth-wrap">
+        <div class="auth-card">
+          <h2 class="auth-title">找回密码</h2>
+          <p class="auth-hint">用注册时绑定的校园邮箱接收 6 位验证码，验证码 15 分钟内有效。</p>
+
+          <div class="auth-form" id="forgot-step1">
+            <label class="field"><span>校园邮箱</span>
+              <input class="input" id="forgot-email" type="email" placeholder="name@xtu.edu.cn" autocomplete="email" required>
+            </label>
+            <p class="auth-msg" id="forgot-msg1" hidden></p>
+            <button class="btn auth-submit" type="button" id="forgot-send">发送验证码</button>
+          </div>
+
+          <div class="auth-form" id="forgot-step2" hidden>
+            <label class="field"><span>验证码</span>
+              <input class="input" id="forgot-code" inputmode="numeric" maxlength="6" placeholder="邮件里的 6 位数字">
+            </label>
+            <label class="field"><span>新密码</span>
+              <input class="input" id="forgot-pass" type="password" autocomplete="new-password" placeholder="8-64 位，含字母和数字">
+            </label>
+            <label class="field"><span>确认新密码</span>
+              <input class="input" id="forgot-pass2" type="password" autocomplete="new-password" placeholder="再输一次">
+            </label>
+            <p class="auth-msg" id="forgot-msg2" hidden></p>
+            <button class="btn auth-submit" type="button" id="forgot-submit">重置密码</button>
+          </div>
+
+          <p class="auth-hint"><a href="#/login" class="link">← 返回登录</a></p>
         </div>
       </div>
     </section>

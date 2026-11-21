@@ -554,3 +554,23 @@ main { max-width: var(--page-max); margin: 0 auto; padding: var(--s-32) var(--s-
 }
 .thumb.has-img { padding: 0; overflow: hidden; }
 .thumb.has-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* ---------- 广场筛选行 ---------- */
+.filters {
+  display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center;
+  margin: 10px 0 4px;
+}
+.filter { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--color-earth-brown); }
+.filter > span { white-space: nowrap; }
+.filter .input { height: 34px; padding: 0 10px; font-size: 12.5px; flex: none; min-width: 104px; }
+.filters .btn-sm { margin-left: auto; }
+
+@media (max-width: 760px) {
+  .filter .input { min-width: 92px; }
+  .filters .btn-sm { margin-left: 0; }
+}
+
+/* ---------- 忘记密码 ---------- */
+.auth-title { font-size: 20px; margin-bottom: 8px; }
+.auth-hint .link, .link { color: var(--color-terracotta); text-decoration: none; border-bottom: 1px solid rgba(181,101,74,.35); }
+.auth-hint .link:hover, .link:hover { border-bottom-color: var(--color-terracotta); }
