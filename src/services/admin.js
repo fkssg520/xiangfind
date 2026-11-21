@@ -3,6 +3,7 @@
 import { nowIso, ID } from '../lib/id.js';
 import { resetDemo } from '../db/demo.js';
 import { issuePasswordResetCode } from './auth.js';
+import { notify } from '../lib/notify.js';
 
 function audit(db, actorId, action, targetType, targetId, summary) {
   db.prepare(
@@ -92,6 +93,13 @@ export function setVolunteer(db, userId, viewer, body) {
       db.prepare("UPDATE users SET role = 'volunteer' WHERE id = ?").run(userId);
       audit(db, viewer.id, enabled ? 'volunteer.grant' : 'volunteer.revoke', 'user', userId,
         `${enabled ? '授予' : '移除'}志愿者：${user.name}${pointIds.length ? '，存放点 ' + pointIds.join(',') : ''}`);
+      // 需求基线 §4.8 表 6：管理员添加志愿者 → 通知被授权用户
+      const names = pointIds
+        .map((pid) => db.prepare('SELECT name FROM storage_points WHERE id = ?').get(pid)?.name)
+        .filter(Boolean);
+      notify(db, userId, '你已成为志愿者',
+        `管理员已把你设为志愿者${names.length ? `，负责：${names.join('、')}` : ''}。你可以在物品详情页确认入库和归还。`,
+        null, 1);
     } else {
       db.prepare('DELETE FROM volunteer_assignments WHERE user_id = ?').run(userId);
       db.prepare("UPDATE users SET role = 'student' WHERE id = ?").run(userId);

@@ -2,6 +2,7 @@
 // 契约：docs/API契约.md §2-§4；状态机：D-001；通知去重：D-004
 import { nowIso, ID } from '../lib/id.js';
 import { attachImages, assertImagesExist } from './uploads.js';
+import { notify, notifyOnce } from '../lib/notify.js';
 import { recomputeMatches, listMatches } from './matching.js';
 
 export const CATEGORIES = ['证件', '电子产品', '钥匙', '书籍', '衣物', '其他'];
@@ -396,6 +397,20 @@ export function patchItem(db, id, { viewer, body }) {
       recomputeMatches(db, id);
     } catch (err) {
       console.error('[items] 匹配重算失败：', err.message);
+    }
+
+    // 需求基线 §4.8 表 6：物品已存放 → 发布者 + 关注用户（收藏者）
+    if (body.status === 'stored' && item.status === 'pending_storage') {
+      const pointName = item.storage_point_id
+        ? db.prepare('SELECT name FROM storage_points WHERE id = ?').get(item.storage_point_id)?.name
+        : null;
+      const where = pointName ? `已送到「${pointName}」` : '已完成入库';
+      notify(db, item.user_id, '物品已存放', `你发布的「${item.title}」${where}，现在可以被匹配和认领了。`, id);
+      const favs = db.prepare('SELECT user_id FROM favorites WHERE item_id = ?').all(id);
+      for (const f of favs) {
+        if (f.user_id === item.user_id) continue;
+        notifyOnce(db, f.user_id, '关注的物品已存放', `你收藏的「${item.title}」${where}。`, id);
+      }
     }
   }
 
