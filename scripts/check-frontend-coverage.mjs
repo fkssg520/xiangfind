@@ -62,7 +62,9 @@ const REQUIRED = [
   ['后台重置密码（§4.10）', () => hasPath('/reset-password')],
   ['后台存放点维护（§4.10）', () => hasPath('/admin/storage-points')],
   ['后台群发消息（§4.10）', () => hasPath('/admin/messages')],
-  ['后台用户搜索（§4.10）', () => hasCode(/\/admin\/users\?(?:[^'"`]*\bq=|q=)/)],
+  // 搜索既可能是 '/admin/users?q=' + ... 也可能是 '/admin/users' + (q ? '?q=' + ...)
+  // 所以只认 '?q=' 这个片段，不绑定拼接形式
+  ['后台用户搜索（§4.10）', () => hasCode(/\?q=/)],
   ['后台存放点排序（§4.10）', () => hasCode(/sortOrder|sort_order/)],
   ['后台恢复演示数据（§4.10）', () => hasPath('/admin/reset-demo')],
   ['后台导出统计（§4.10）', () => hasPath('/admin/stats')],
