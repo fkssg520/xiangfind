@@ -14,6 +14,8 @@ param(
     [switch]$KeepDb
 )
 
+# 冒烟/测试禁用 .env：验证码要打在日志里才能被脚本读到
+$env:XF_NO_DOTENV = '1'
 $ErrorActionPreference = 'Continue'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot

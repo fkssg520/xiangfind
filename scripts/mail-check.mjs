@@ -2,16 +2,17 @@
 // 拿到邮箱授权码后先跑这个，别等到演示当天才发现发不出信（验收 A-02）
 // 用法：node scripts/mail-check.mjs [收件邮箱]
 //   不带参数 = 只校验配置完整性，不真发
-import { config } from 'node:process';
 import { readFileSync, existsSync } from 'node:fs';
 import { sendMail, isSmtpConfigured } from '../src/lib/mailer.js';
 
 // 手动加载 .env（不引第三方依赖）
+// 注意：不能写 process.config（Node 26 里它是不可扩展对象，赋��会抛
+// TypeError: Cannot add property PORT, object is not extensible），要写 process.env
 const envPath = new URL('../.env', import.meta.url);
 if (existsSync(envPath)) {
   for (const line of readFileSync(envPath, 'utf8').split('\n')) {
     const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)$/.exec(line);
-    if (m && !config[m[1]]) config[m[1]] = m[2].replace(/^["']|["']$/g, '').trim();
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '').trim();
   }
 }
 
@@ -56,7 +57,24 @@ try {
     text: `这是一封自动测试邮件。\n\n验证码：${code}\n\n收到说明 SMTP 配置正确，验收项 A-02（真实邮箱收验证码）可以通过。\n\n— 湘寻`,
   });
   const ms = Date.now() - started;
-  console.log(`  ✓ 发送成功（${ms} ms）`, out && out.messageId ? `messageId=${out.messageId}` : '');
+
+  // 关键：sendMail 不抛异常不代表发出去了。必须看 delivered。
+  // 2026-11-21 修：nodemailer 没装时它会返回 {delivered:false, reason:'nodemailer_missing'}，
+  // 而这里原来无条件打「✓ 发送成功」——验证码只打进了日志，自检却是绿的（假绿）。
+  if (!out || !out.delivered) {
+    console.log(`  ✗ 没有真正发出（${ms} ms）reason=${out?.reason || 'unknown'}`);
+    if (out?.reason === 'nodemailer_missing') {
+      console.log('  nodemailer 未安装：SMTP 已配置但没有发信库，验证码只会打到服务端日志。');
+      console.log('  解决：npm install（依赖在 package.json 的 dependencies 里）');
+    } else if (out?.reason === 'smtp_not_configured') {
+      console.log('  SMTP 未配置：检查 .env 里 SMTP_HOST/PORT/USER/PASSWORD 是否被加载。');
+    } else if (out?.reason === 'send_failed') {
+      console.log('  发送失败：' + (out.error || ''));
+    }
+    process.exit(1);
+  }
+
+  console.log(`  ✓ 发送成功（${ms} ms）`, out.messageId ? `messageId=${out.messageId}` : '');
   console.log(`  请到 ${to} 查收，主题「湘寻 · 邮件通道自检」，验证码 ${code}`);
   console.log('  没收到：先看垃圾箱，再看服务商是否拦截，最后查 SMTP_PORT（465 用 SSL，587 用 STARTTLS）');
   process.exit(0);

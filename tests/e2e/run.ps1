@@ -16,6 +16,8 @@ param(
 # -File 方式传参时 "a,b" 是单个字符串，这里拆成数组
 $Scenarios = @($Scenarios | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 
+# 冒烟/测试禁用 .env：验证码要打在日志里才能被脚本读到
+$env:XF_NO_DOTENV = '1'
 $ErrorActionPreference = 'Continue'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $root = Split-Path -Parent (Split-Path -Parent $here)
