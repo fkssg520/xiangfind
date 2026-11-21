@@ -131,17 +131,50 @@ check('停用后无法登录 403', disabledLogin.status === 403, disabledLogin.d
 const enable = await call('POST', `/api/admin/users/${targetUser.id}/status`, { status: 'active' });
 check('重新启用 200', enable.status === 200);
 
-// 13. 替用户发送重置密码邮件
-const resetMail = await call('POST', `/api/admin/users/${targetUser.id}/reset-password`);
-check('发送重置密码 200', resetMail.status === 200, resetMail.data?.error?.message);
-check('返回投递方式', ['email', 'log'].includes(resetMail.data?.delivery), resetMail.data?.delivery);
-// 2026-11-21 人类误以为"点了重置密码密码就变了"——返回值必须把语义说清
-check('说明「不改密码」', /不会直接改密码|忘记密码/.test(String(resetMail.data?.note || '')),
-  String(resetMail.data?.note || '(无 note)'));
-check('标注需要用户继续操作', resetMail.data?.requiresUserAction === true,
-  String(resetMail.data?.requiresUserAction));
-check('返回打码后的收件邮箱', /^.*\*+@.+$/.test(String(resetMail.data?.sentTo || '')),
-  String(resetMail.data?.sentTo || '(无 sentTo)'));
+// 13. 管理员直接设置密码（2026-11-21 需求变更：不再只是发验证码）
+// 为了不影响演示账号，这里注册一个一次性账号来改
+const tmpSid = '25' + stamp;
+const tmpEmail = `pw${stamp}@example.com`;
+const tmpPwOld = 'OldPass123';
+const tmpPwNew = 'NewPass456';
+const regTmp = await call('POST', '/api/auth/register',
+  { studentId: tmpSid, name: '改密测试', email: tmpEmail, password: tmpPwOld });
+check('改密用的一次性账号已注册', regTmp.status === 201, String(regTmp.status));
+
+const tmpUser = (await call('GET', `/api/admin/users?q=${tmpSid}`)).data.users.find((u) => u.studentId === tmpSid);
+check('后台能搜到该账号', Boolean(tmpUser));
+
+const setPw = await call('POST', `/api/admin/users/${tmpUser.id}/reset-password`,
+  { password: tmpPwNew, confirmPassword: tmpPwNew });
+check('管理员直接改密码 200', setPw.status === 200, setPw.data?.error?.message);
+check('返回 mode=direct', setPw.data?.mode === 'direct', String(setPw.data?.mode));
+check('说明里含"踢出会话"', /踢出|会话/.test(String(setPw.data?.note || '')), String(setPw.data?.note || ''));
+
+// 新密码能登录，旧密码不能
+const loginNew = await loginAs(tmpSid, tmpPwNew);
+check('新密码可登录', loginNew.status === 200, String(loginNew.status));
+await loginAs('90000001');
+const loginOld = await call('POST', '/api/auth/login', { studentId: tmpSid, password: tmpPwOld });
+check('旧密码已失效 401', loginOld.status === 401, String(loginOld.status));
+await loginAs('90000001');
+
+// 弱密码被拒
+const weakPw = await call('POST', `/api/admin/users/${tmpUser.id}/reset-password`, { password: 'short' });
+check('弱密码被拒 400', weakPw.status === 400, weakPw.data?.error?.message);
+// 不给密码被拒（明确要求填新密码，而不是静默去发邮件）
+const noPw = await call('POST', `/api/admin/users/${tmpUser.id}/reset-password`, {});
+check('不给新密码被拒 400', noPw.status === 400, noPw.data?.error?.message);
+
+// 审计只记行为，不记密码
+const auditPw = await call('GET', '/api/admin/audit-logs?limit=10');
+const pwAudit = (auditPw.data?.logs || []).find((l) => l.action === 'user.set_password');
+check('改密码进审计', Boolean(pwAudit), pwAudit?.summary || '(无)');
+check('审计里没有明文密码', !JSON.stringify(auditPw.data?.logs || []).includes(tmpPwNew));
+
+// 14. 老能力保留：发验证码让用户自己改
+const sendCode = await call('POST', `/api/admin/users/${targetUser.id}/send-reset-code`);
+check('发送重置码仍可用 200', sendCode.status === 200, sendCode.data?.error?.message);
+check('发码返回投递方式', ['email', 'log'].includes(sendCode.data?.delivery), String(sendCode.data?.delivery));
 
 // 14. 管理视角物品列表（含归档筛选）
 const adminItems = await call('GET', '/api/admin/items?pageSize=50');

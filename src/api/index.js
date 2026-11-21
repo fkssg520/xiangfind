@@ -9,7 +9,7 @@ import {
   overview as adminOverview, searchUsers as adminSearchUsers, setVolunteer,
   listStoragePoints, createStoragePoint, updateStoragePoint,
   listClaims as adminListClaims, resetDemoData, listAudit,
-  setUserStatus, sendPasswordReset, listItemsAdmin, sendSystemMessage, exportStats, recomputeAllMatches,
+  setUserStatus, sendPasswordReset, setUserPassword, listItemsAdmin, sendSystemMessage, exportStats, recomputeAllMatches,
 } from '../services/admin.js';
 import { verifyCsrf } from '../lib/csrf.js';
 import {
@@ -357,9 +357,15 @@ export async function handleApi(req, res, ctx) {
     if (statusMatch && (req.method === 'POST' || req.method === 'PATCH')) {
       const out = setUserStatus(db, statusMatch[1], viewer, body); json(res, out.status, out.body); return true;
     }
+    // 管理员直接设置密码（2026-11-21 需求变更：不再只是发验证码）
     const resetPwMatch = path.match(/^\/api\/admin\/users\/([A-Za-z0-9_-]+)\/reset-password$/);
     if (resetPwMatch && req.method === 'POST') {
-      const out = await sendPasswordReset(db, resetPwMatch[1], viewer); json(res, out.status, out.body); return true;
+      const out = setUserPassword(db, resetPwMatch[1], viewer, body); json(res, out.status, out.body); return true;
+    }
+    // 老能力保留：发验证码，让用户自己在「忘记密码」页改
+    const sendCodeMatch = path.match(/^\/api\/admin\/users\/([A-Za-z0-9_-]+)\/send-reset-code$/);
+    if (sendCodeMatch && req.method === 'POST') {
+      const out = await sendPasswordReset(db, sendCodeMatch[1], viewer); json(res, out.status, out.body); return true;
     }
     if (path === '/api/admin/items' && req.method === 'GET') {
       const out = listItemsAdmin(db, viewer, Object.fromEntries(url.searchParams)); json(res, out.status, out.body); return true;
