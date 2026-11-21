@@ -192,6 +192,8 @@ export function login(db, body, ip) {
         id: user.id, studentId: user.student_id, name: user.name, email: user.email,
         role: user.role, isVolunteer: user.role === 'volunteer',
         emailVerified: Boolean(user.email_verified_at),
+        // 与 /api/me 保持一致：登录后首屏就能准确判断能确认哪些存放点的入库
+        storagePoints: volunteerPoints(db, user.id, user.role),
       },
     },
     userId: user.id,
