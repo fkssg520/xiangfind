@@ -31,7 +31,23 @@ if (-not (Test-Path $edge)) {
     exit 2
 }
 
+# 开浏览器之前先校验 harness 内联脚本语法（改 harness 时最容易留下语法错误，
+# 表现是页面白屏 + 「没有拿到结果」，很难查）
+$nodeExe = (Get-Command node -ErrorAction SilentlyContinue)
+if ($nodeExe) {
+    $checker = Join-Path $here 'verify\check-harness.mjs'
+    $checkOut = & node $checker (Join-Path $here 'harness.html') 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "harness 语法检查失败：" -ForegroundColor Red
+        Write-Host $checkOut
+        exit 3
+    }
+    Write-Host $checkOut -ForegroundColor DarkGray
+} else {
+    Write-Host "PATH 里没有 node，跳过 harness 语法检查" -ForegroundColor Yellow
+}
 $harnessPublic = Join-Path $root 'public\__e2e-harness.html'
+
 Copy-Item (Join-Path $here 'harness.html') $harnessPublic -Force
 
 $profileDir = Join-Path $env:TEMP 'xf-e2e-edge'
@@ -86,7 +102,7 @@ try {
                 'login'     { $ok = ($r.who -and $r.who -ne '登录' -and $r.hash -eq '#/plaza') }
                 'plaza'     { $ok = ([int]$r.cards -gt 0) }
                 'detail'    { $ok = ($r.title -and [int]$r.rows -ge 5) }
-                'claim'     { $ok = ($r.modal -eq $true) -or ($r.skipped -eq $true) }
+                'claim'     { $ok = ($r.modal -eq $true) }
                 'publish'   { $ok = ($r.moved -eq $true -and $r.title -like '*E2E*') }
                 'admin'     { $ok = ($r.tabs.Count -eq 5 -and [int]$r.kpis -gt 0) }
                 'forbidden' { $ok = ($r.guarded -eq $true) }
