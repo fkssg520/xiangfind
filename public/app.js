@@ -1842,25 +1842,43 @@ async function decideClaim(claimId, decision, itemId) {
 }
 
 /* ---------- P2：重置密码 + 群发消息 ---------- */
+/* 管理员直接设置新密码（#135：不再发验证码，改完踢掉该用户全部会话） */
 async function adminResetPassword(user, pane) {
-  const yes = await confirmDialog('发送重置密码邮件？', '将给「' + (user.name || user.studentId) + '」的绑定邮箱发送 6 位验证码，15 分钟内有效。', '发送');
-  if (!yes) return;
-  const r = await api('/admin/users/' + encodeURIComponent(user.id) + '/reset-password', { method: 'POST' });
-  if (!r.ok) {
-    toast(errText(r, '发送失败'));
-    return;
-  }
-  const d = r.data || {};
-  if (d.delivery === 'log') {
-    toast('已生成验证码（开发环境：见服务端日志）');
-  } else if (d.cooldown) {
-    toast(`刚发过，请 ${d.cooldown} 秒后再试`);
-  } else {
-    toast('重置邮件已发送');
-  }
-  renderAdminPane('users', pane);
-}
+  const isSelf = currentUser && user.id === currentUser.id;
+  adminModal(
+    '重置「' + (user.name || user.studentId) + '」的密码',
+    isSelf
+      ? '这是你自己正在使用的账号：改完会立即退出登录，需要用新密码重新登录。'
+      : '改完会踢掉该用户的全部登录会话，请把新密码告知本人。密码需 8-64 位并同时包含字母和数字。',
+    [
+      { key: 'password', label: '新密码', type: 'password', placeholder: '8-64 位，含字母和数字' },
+      { key: 'confirmPassword', label: '确认新密码', type: 'password', placeholder: '再输一次' },
+    ],
+    async (data) => {
+      const pw = data.password || '';
+      if (pw.length < 8 || pw.length > 64 || !/[A-Za-z]/.test(pw) || !/\d/.test(pw)) {
+        return { ok: false, message: '密码需 8-64 位，且同时包含字母和数字' };
+      }
+      if (pw !== data.confirmPassword) {
+        return { ok: false, message: '两次输入的密码不一致' };
+      }
+      const r = await api('/admin/users/' + encodeURIComponent(user.id) + '/reset-password', {
+        method: 'POST',
+        body: { password: pw, confirmPassword: data.confirmPassword },
+      });
+      if (!r.ok) return { ok: false, message: errText(r, '重置失败') };
 
+      const d = r.data || {};
+      toast(d.note || '密码已重置');
+      if (isSelf) {
+        setTimeout(() => { location.hash = '#/login'; location.reload(); }, 1200);
+        return { ok: true };
+      }
+      renderAdminPane('users', pane);
+      return { ok: true };
+    },
+  );
+}
 async function adminCountRecipients(role) {
   const r = await api('/admin/users');
   if (!r.ok) return null;
