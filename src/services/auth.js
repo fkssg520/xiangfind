@@ -289,7 +289,22 @@ export async function issuePasswordResetCode(db, email) {
   return { ok: true, delivered: r.delivered };
 }
 
-export function publicUser(user) {  if (!user) return null;
+// 志愿者绑定的存放点（供前端提前判断能确认哪些点的物品，避免点一次 403）
+export function volunteerPoints(db, userId, role) {
+  if (role !== 'volunteer') return [];
+  return db
+    .prepare(
+      `SELECT sp.id, sp.name, sp.type FROM volunteer_assignments va
+         JOIN storage_points sp ON sp.id = va.storage_point_id
+        WHERE va.user_id = ?
+        ORDER BY sp.sort_order, sp.name`
+    )
+    .all(userId)
+    .map((p) => ({ id: p.id, name: p.name, type: p.type }));
+}
+
+export function publicUser(user) {
+  if (!user) return null;
   return {
     id: user.id,
     studentId: user.student_id ?? user.studentId,
