@@ -5,15 +5,29 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { sendMail, isSmtpConfigured } from '../src/lib/mailer.js';
 
-// 手动加载 .env（不引第三方依赖）
-// 注意：不能写 process.config（Node 26 里它是不可扩展对象，赋��会抛
-// TypeError: Cannot add property PORT, object is not extensible），要写 process.env
+// 手动加载 .env（不引第三方依赖，与 src/lib/env.js 同一套规则）
+// 注意两个坑（小冯 2026-11-21 报的，都是真的）：
+//   ① 不能写 process.config（Node 26 里它不可扩展），要写 process.env
+//   ② 必须容忍 CRLF：Windows 下 .env 行尾是 \r\n，正则 (.*)$ 匹配不到 \r → 一行都读不出来
 const envPath = new URL('../.env', import.meta.url);
+let parsedKeys = 0;
 if (existsSync(envPath)) {
-  for (const line of readFileSync(envPath, 'utf8').split('\n')) {
-    const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)$/.exec(line);
-    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '').trim();
+  for (const raw of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+    const line = raw.trim(); // 先 trim：既去掉 \r，也去掉首尾空白
+    if (!line || line.startsWith('#')) continue;
+    const m = /^([A-Z0-9_]+)\s*=\s*(.*)$/.exec(line);
+    if (!m) continue;
+    if (!process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '').trim();
+    parsedKeys += 1;
   }
+}
+
+// .env 存在却一行都没解析出来 → 是解析问题，不是"没配置"。两者输出必须能区分。
+if (existsSync(envPath) && parsedKeys === 0) {
+  console.log('\n  ✗ .env 存在，但一行配置都没解析出来（格式问题，不是没配置）');
+  console.log('    常见原因：文件是 UTF-16 编码、或每行前面有 BOM/不可见字符');
+  console.log('    期望格式：KEY=VALUE，一行一个，不带引号也能识别');
+  process.exit(1);
 }
 
 const to = process.argv[2];
