@@ -3,6 +3,7 @@
 import { nowIso, ID } from '../lib/id.js';
 import { resetDemo } from '../db/demo.js';
 import { issuePasswordResetCode } from './auth.js';
+import { hashPassword } from '../lib/password.js';
 import { notify } from '../lib/notify.js';
 import { recomputeMatches } from './matching.js';
 
@@ -242,6 +243,72 @@ export function setUserStatus(db, userId, viewer, body) {
 }
 
 // 替用户发一封重置密码验证码
+// 管理员直接设置用户密码（2026-11-21 人类改需求：不再发验证码，由管理员直接改）
+// 安全约束：
+//   · 只允许管理员调用（requireAdmin）
+//   · 密码强度与用户自助重置一致（8-64 位，含字母和数字）
+//   · 改完踢掉该用户所有会话，强制用新密码重新登录
+//   · 审计日志只记"谁改了谁的密码"，**绝不记录密码本身**
+export function setUserPassword(db, userId, viewer, body = {}) {
+  if (!requireAdmin(viewer)) return { status: 403, body: { error: { code: 'forbidden', message: '需要管理员权限' } } };
+
+  const user = db.prepare('SELECT id, student_id, name FROM users WHERE id = ?').get(userId);
+  if (!user) return { status: 404, body: { error: { code: 'not_found', message: '用户不存在' } } };
+
+  const password = String(body.password || '');
+  const confirm = String(body.confirmPassword ?? body.confirm ?? '');
+
+  if (!password) {
+    return {
+      status: 400,
+      body: { error: { code: 'password', message: '请填写新密码（8-64 位，含字母和数字）' } },
+    };
+  }
+  if (password.length < 8 || password.length > 64 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+    return {
+      status: 400,
+      body: { error: { code: 'password', message: '密码需 8-64 位，且同时包含字母和数字' } },
+    };
+  }
+  if (confirm && confirm !== password) {
+    return { status: 400, body: { error: { code: 'confirmPassword', message: '两次输入的密码不一致' } } };
+  }
+  // 不允许把密码设成和学号相同这类弱值（学号本身是公开信息）
+  if (password === user.student_id) {
+    return { status: 400, body: { error: { code: 'password', message: '密码不能与学号相同' } } };
+  }
+
+  let revoked = 0;
+  db.exec('BEGIN');
+  try {
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(password), userId);
+    revoked = db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId).changes;
+    // 这次是"直接改密码"，任何未使用的重置验证码都应作废
+    db.prepare("UPDATE email_tokens SET used_at = ? WHERE email = (SELECT email FROM users WHERE id = ?) AND purpose = 'reset' AND used_at IS NULL")
+      .run(nowIso(), userId);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+
+  // 审计：只记行为，不记密码
+  audit(db, viewer.id, 'user.set_password', 'user', userId,
+    `管理员直接重置了 ${user.name}（${user.student_id}）的密码，已踢出 ${revoked} 个会话`);
+
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      mode: 'direct',
+      user: { id: user.id, studentId: user.student_id, name: user.name },
+      sessionsRevoked: revoked,
+      note: `已将 ${user.name}（${user.student_id}）的密码改为新密码，并踢出其所有登录会话。请把新密码告知本人。`,
+    },
+  };
+}
+
+// 保留"发验证码让用户自己改"的老能力（管理员有时更愿意让用户自己设）
 export async function sendPasswordReset(db, userId, viewer) {
   if (!requireAdmin(viewer)) return { status: 403, body: { error: { code: 'forbidden', message: '需要管理员权限' } } };
   const user = db.prepare('SELECT id, email, name FROM users WHERE id = ?').get(userId);

@@ -272,7 +272,8 @@
 | GET | `/api/admin/users?q=` | 搜用户（学号/邮箱/姓名） |
 | POST | `/api/admin/users/:id/volunteer` | 授予/移除志愿者 |
 | POST | `/api/admin/users/:id/status` | 停用/启用（停用会踢会话） |
-| POST | `/api/admin/users/:id/reset-password` | 替用户发重置验证码 |
+| POST | `/api/admin/users/:id/reset-password` | **管理员直接设置新密码**（body `{password, confirmPassword?}`；改完踢掉该用户所有会话；审计只记行为不记密码） |
+| POST | `/api/admin/users/:id/send-reset-code` | 替用户发重置验证码（老能力，保留；用户需在「忘记密码」页自己改） |
 | GET | `/api/admin/storage-points` | 存放点列表（含停用） |
 | POST | `/api/admin/storage-points` | 新增 |
 | PATCH | `/api/admin/storage-points/:id` | 修改 / 启停 |
