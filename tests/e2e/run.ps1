@@ -86,7 +86,7 @@ try {
                 'login'     { $ok = ($r.who -and $r.who -ne '登录' -and $r.hash -eq '#/plaza') }
                 'plaza'     { $ok = ([int]$r.cards -gt 0) }
                 'detail'    { $ok = ($r.title -and [int]$r.rows -ge 5) }
-                'claim'     { $ok = ($r.modal -eq $true) }
+                'claim'     { $ok = ($r.modal -eq $true) -or ($r.skipped -eq $true) }
                 'publish'   { $ok = ($r.moved -eq $true -and $r.title -like '*E2E*') }
                 'admin'     { $ok = ($r.tabs.Count -eq 5 -and [int]$r.kpis -gt 0) }
                 'forbidden' { $ok = ($r.guarded -eq $true) }

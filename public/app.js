@@ -347,6 +347,8 @@ function buildDetail(item, id) {
   }
   cbtn.addEventListener('click', () => {
     if (cbtn.disabled) return;
+    // 发布者点的是「管理」：去「我的发布」列表，不要弹认领框
+    if (item.isOwner) { location.hash = '#/me/posts'; return; }
     openClaimDialog(item, () => loadDetail(item.id));
   });
   // 只在「自己发布的」或「当前可认领的」情况下显示按钮，避免出现禁用的死按钮
@@ -755,6 +757,18 @@ async function renderPane(key, pane) {
         const table = STATUS_MAP[it.type] || {};
         const [label, tone] = table[it.status] || [it.status, 'muted'];
         row.append(el('span', `status ${tone}`, label));
+        if (it.status !== 'archived' && it.status !== 'returned') {
+          const down = el('span', 'admin-act muted', '下架');
+          down.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!confirm('关闭这条信息？关闭后不再出现在广场。')) return;
+            const r = await api('/items/' + encodeURIComponent(it.id), { method: 'PATCH', body: { status: 'archived' } });
+            if (!r.ok) { toast(errText(r, '操作失败')); return; }
+            toast('已下架');
+            renderPane('posts', pane);
+          });
+          row.append(down);
+        }
         row.addEventListener('click', () => { location.hash = `#/item/${it.id}`; });
         list.append(row);
       });
