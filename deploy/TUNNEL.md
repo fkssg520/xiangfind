@@ -182,3 +182,6 @@ cloudflared service install
 | 隧道连不上 | 公司/校园网限制出站 | 换手机热点试试 |
 | 地址能开但很慢 | 走的境外节点 | 正常现象，演示时提前打开预热 |
 | 图片打不开 | 上传目录权限 | 确认 `uploads/` 存在且服务能写 |
+
+> **别把 cloudflared 跑在前台终端里**：关掉窗口进程就死了，症状是 `HTTP 530`（域名还在、后面没人接）。
+> 用 `Start-Process -WindowStyle Hidden` 起，或用计划任务/服务的方式常驻。

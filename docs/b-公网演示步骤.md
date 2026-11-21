@@ -104,3 +104,45 @@ D:\Deepseek\tools\cloudflared.exe tunnel --url http://127.0.0.1:3000
 - 下载 `cloudflared.exe`（52.9 MB）花了约 15 分钟：GitHub 直连被反复重置，最后靠
   `curl --ssl-no-revoke --http1.1 -C - --limit-rate 400k` 断点续传完成。
   **装过一次就不用再装**，文件在 `D:\Deepseek\tools\cloudflared.exe`。
+
+---
+
+## ⚠️ 实测踩过的坑：隧道会「自己死」
+
+**2026-11-21 16:50 实测**：隧道域名解析正常，但访问返回
+
+```
+HTTP 530  Cloudflare Tunnel error
+```
+
+原因：`cloudflared` 进程不在了（**关掉终端窗口就跟着死**）。地址还是好的，但后面没人接。
+
+### 两条硬性规定
+
+**① 用隐藏窗口起隧道**（不要把 cloudflared 跑在前台终端里）
+
+```powershell
+Start-Process -FilePath "D:\DeepseekWork\tools\cloudflared.exe" `
+  -ArgumentList 'tunnel','--protocol','http2','--url','http://127.0.0.1:3000','--no-autoupdate' `
+  -WindowStyle Hidden `
+  -RedirectStandardError "$env:TEMP\cf.log"
+
+# 看地址
+Get-Content "$env:TEMP\cf.log" | Select-String 'trycloudflare.com'
+```
+
+**② 关掉睡眠**（电脑睡了，服务和隧道一起停）
+
+```powershell
+powercfg /change standby-timeout-ac 0
+powercfg /change hibernate-timeout-ac 0
+```
+
+演示结束再改回来：`powercfg /change standby-timeout-ac 30`。
+
+### 演示前 30 秒自检
+
+```powershell
+curl -s -o NUL -w "%{http_code}" https://你的地址/health
+# 期望 200；530 就是隧道死了，按上面重拉
+```
