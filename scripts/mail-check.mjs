@@ -80,7 +80,14 @@ try {
   process.exit(0);
 } catch (err) {
   console.log(`  ✗ 发送失败：${err.message}`);
-  if (/auth|535|534/i.test(err.message)) {
+  if (/535|534/i.test(err.message)) {
+    console.log('  这是 SMTP 认证被拒。QQ 返回 535 有四种含义，按可能性排：');
+    console.log('    ① 填了登录密码而不是授权码（最常见）');
+    console.log('    ② 授权码已被重置/停用（设置 → 账户 → POP3/SMTP 服务）');
+    console.log('    ③ 短时间发信太频繁，被临时频控（等 10-30 分钟再试，别连发）');
+    console.log('    ④ 账号异常被限制（需去 QQ 邮箱网页版按提示解除）');
+    console.log('  原始响应：' + err.message);
+  } else if (/auth/i.test(err.message)) {
     console.log('  这是认证失败——八成是填了登录密码而不是授权码。');
   } else if (/timeout|ETIMEDOUT|ECONNREFUSED/i.test(err.message)) {
     console.log('  连不上服务器——检查 SMTP_HOST / SMTP_PORT，或服务器屏蔽了 465/587 出站。');
