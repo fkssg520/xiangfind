@@ -251,13 +251,19 @@ export async function sendPasswordReset(db, userId, viewer) {
   const r = await issuePasswordResetCode(db, user.email);
   audit(db, viewer.id, 'user.send_reset', 'user', userId, `为用户 ${user.name} 发送重置密码邮件`);
   if (!r.ok) return { status: 429, body: { error: { code: r.reason, message: '发送受限（今日次数已达上限）' } } };
+  // 打码邮箱：管理员要能确认"发到哪个邮箱了"——演示账号是 @demo.local 这种假域名，收不到信
+  const masked = String(user.email).replace(/^(.{1,3})([^@]*)(@.*)$/, (m, a, b, c) => a + '*'.repeat(Math.max(1, b.length)) + c);
   return {
     status: 200,
     body: {
       ok: true,
       delivery: r.delivered ? 'email' : 'log',
       cooldown: r.reason === 'cooldown' ? r.cooldownSeconds : 0,
-      note: '验证码 15 分钟内有效；开发环境打在服务端日志',
+      // 关键说明：本接口不发新密码，只发验证码；密码由用户自己在「忘记密码」页设置
+      note: `已发送重置验证码到 ${masked}（15 分钟内有效）。管理员不会直接改密码，`
+        + '用户需在「忘记密码」页用该验证码设置新密码。',
+      sentTo: masked,
+      requiresUserAction: true,
     },
   };
 }
