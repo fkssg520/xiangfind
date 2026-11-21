@@ -135,6 +135,13 @@ check('重新启用 200', enable.status === 200);
 const resetMail = await call('POST', `/api/admin/users/${targetUser.id}/reset-password`);
 check('发送重置密码 200', resetMail.status === 200, resetMail.data?.error?.message);
 check('返回投递方式', ['email', 'log'].includes(resetMail.data?.delivery), resetMail.data?.delivery);
+// 2026-11-21 人类误以为"点了重置密码密码就变了"——返回值必须把语义说清
+check('说明「不改密码」', /不会直接改密码|忘记密码/.test(String(resetMail.data?.note || '')),
+  String(resetMail.data?.note || '(无 note)'));
+check('标注需要用户继续操作', resetMail.data?.requiresUserAction === true,
+  String(resetMail.data?.requiresUserAction));
+check('返回打码后的收件邮箱', /^.*\*+@.+$/.test(String(resetMail.data?.sentTo || '')),
+  String(resetMail.data?.sentTo || '(无 sentTo)'));
 
 // 14. 管理视角物品列表（含归档筛选）
 const adminItems = await call('GET', '/api/admin/items?pageSize=50');
