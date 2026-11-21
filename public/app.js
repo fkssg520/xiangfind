@@ -479,7 +479,8 @@ function buildDetail(item, id) {
     done.type = 'button';
     done.style.marginTop = '10px';
     done.addEventListener('click', async () => {
-      if (!confirm('确认这件物品已经交还给失主？确认后状态变为「已归还」。')) return;
+      const okReturn = await confirmDialog('确认已归还？', '确认后物品状态变为「已归还」，并记录归还时间。', '确认归还');
+      if (!okReturn) return;
       done.disabled = true;
       const r = await api('/items/' + encodeURIComponent(item.id) + '/return', { method: 'POST' });
       done.disabled = false;
@@ -1042,7 +1043,8 @@ async function renderPane(key, pane) {
           const done = el('span', 'admin-act', '标记找回');
           done.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (!confirm('标记为「已找回」？之后不再出现在广场的进行中列表。')) return;
+            const okReunite = await confirmDialog('标记为已找回？', '标记后不再出现在广场的进行中列表。', '标记找回');
+            if (!okReunite) return;
             const r = await api('/items/' + encodeURIComponent(it.id), { method: 'PATCH', body: { status: 'reunited' } });
             if (!r.ok) { toast(errText(r, '操作失败')); return; }
             toast('已标记找回');
@@ -1055,7 +1057,8 @@ async function renderPane(key, pane) {
           const down = el('span', 'admin-act muted', '下架');
           down.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (!confirm('关闭这条信息？关闭后不再出现在广场。')) return;
+            const okDown = await confirmDialog('关闭这条信息？', '关闭后不再出现在广场，可由管理员恢复。', '下架');
+            if (!okDown) return;
             const r = await api('/items/' + encodeURIComponent(it.id), { method: 'PATCH', body: { status: 'archived' } });
             if (!r.ok) { toast(errText(r, '操作失败')); return; }
             toast('已下架');
@@ -1292,6 +1295,30 @@ async function loadUnread() {
   }
 }
 
+/* 页面内确认框（替代原生 confirm：原生弹窗可能被浏览器静默拦截，点了像没反应） */
+function confirmDialog(title, hint, okText = '确定') {
+  return new Promise((resolve) => {
+    const mask = el('div', 'modal-mask');
+    const box = el('div', 'modal');
+    box.append(el('h3', null, title));
+    if (hint) box.append(el('p', 'modal-hint', hint));
+    const acts = el('div', 'modal-actions');
+    const cancel = el('button', 'btn btn-ghost', '取消');
+    cancel.type = 'button';
+    const ok = el('button', 'btn', okText);
+    ok.type = 'button';
+    acts.append(cancel, ok);
+    box.append(acts);
+    mask.append(box);
+    document.body.append(mask);
+
+    const close = (val) => { mask.remove(); resolve(val); };
+    cancel.addEventListener('click', () => close(false));
+    ok.addEventListener('click', () => close(true));
+    mask.addEventListener('click', (e) => { if (e.target === mask) close(false); });
+    ok.focus();
+  });
+}
 /* ---------- 管理后台 ---------- */
 let adminUserQuery = ''; // 用户搜索关键词（跨重渲染保留）
 const ADMIN_KPIS = [
@@ -1562,7 +1589,10 @@ async function adminSetVolunteer(user, enabled, pane, storagePointIds) {
 }
 
 async function adminSetStatus(userId, status, pane) {
-  if (status === 'disabled' && !confirm('停用后该用户会被强制退出所有会话，确定吗？')) return;
+  if (status === 'disabled') {
+    const yes = await confirmDialog('停用这个账号？', '停用后该用户会被强制退出所有会话，无法再登录。', '停用');
+    if (!yes) return;
+  }
   const r = await api('/admin/users/' + encodeURIComponent(userId) + '/status', { method: 'POST', body: { status } });
   if (!r.ok) return toast(errText(r, '操作失败'));
   toast(status === 'disabled' ? '已停用' : '已启用');
@@ -1813,7 +1843,8 @@ async function decideClaim(claimId, decision, itemId) {
 
 /* ---------- P2：重置密码 + 群发消息 ---------- */
 async function adminResetPassword(user, pane) {
-  if (!confirm(`给「${user.name || user.studentId}」发送重置密码邮件？\n验证码 15 分钟内有效。`)) return;
+  const yes = await confirmDialog('发送重置密码邮件？', '将给「' + (user.name || user.studentId) + '」的绑定邮箱发送 6 位验证码，15 分钟内有效。', '发送');
+  if (!yes) return;
   const r = await api('/admin/users/' + encodeURIComponent(user.id) + '/reset-password', { method: 'POST' });
   if (!r.ok) {
     toast(errText(r, '发送失败'));
@@ -1905,7 +1936,8 @@ function openBroadcastDialog(pane) {
     const text = bodyInput.value.trim();
     if (title.length < 1 || title.length > 60) { msg.hidden = false; msg.textContent = '标题需 1-60 字'; return; }
     if (text.length < 1 || text.length > 1000) { msg.hidden = false; msg.textContent = '正文需 1-1000 字'; return; }
-    if (!confirm(`确定发送「${title}」给 ${count.textContent.replace('将发送给 ', '')} 吗？`)) return;
+    const okSend = await confirmDialog('确定群发？', '将发送「' + title + '」给 ' + count.textContent.replace('将发送给 ', '') + '。', '发送');
+    if (!okSend) return;
 
     submit.disabled = true;
     submit.textContent = '发送中…';
@@ -1988,7 +2020,8 @@ async function adminShowStats(pane) {
 }
 
 async function adminRecomputeMatches(pane) {
-  if (!confirm('重新计算全部匹配？只重跑打分与通知，不改物品状态。')) return;
+  const yes = await confirmDialog('重新计算全部匹配？', '只重跑规则打分与通知，不改物品状态。', '开始重算');
+  if (!yes) return;
   const r = await api('/admin/recompute-matches', { method: 'POST' });
   if (!r.ok) { toast(errText(r, '重算失败')); return; }
   const d = r.data || {};
@@ -1999,8 +2032,10 @@ async function adminRecomputeMatches(pane) {
 }
 
 async function adminResetDemo(pane) {
-  if (!confirm('恢复演示数据会清空当前所有业务数据（物品、认领、消息、收藏），只保留账号。确定吗？')) return;
-  if (!confirm('再确认一次：这是不可撤销的操作，演示前才用。继续？')) return;
+  const yes = await confirmDialog('恢复演示数据？', '会清空当前所有业务数据（物品、认领、消息、收藏），只保留账号。此操作不可撤销。', '继续');
+  if (!yes) return;
+  const yes2 = await confirmDialog('再确认一次', '这是不可撤销的操作，演示前才用。确定恢复？', '确定恢复');
+  if (!yes2) return;
   const r = await api('/admin/reset-demo', { method: 'POST' });
   if (!r.ok) { toast(errText(r, '恢复失败')); return; }
   toast('演示数据已恢复');
