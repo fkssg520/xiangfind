@@ -52,6 +52,9 @@
 `storagePoints` 仅志愿者非空，形如 `[{ "id": "stp_x", "name": "图书馆一楼服务台", "type": "normal" }]`。
 前端可用它**提前**判断"能确认哪些存放点的入库"，不必点一次再吃 403。
 
+**`POST /api/auth/login` 返回的 user 与此结构一致**（同样带 `storagePoints`），
+登录后首屏即可准确判断，不必再拉一次 `/api/me`。
+
 ---
 
 # 二、物品
