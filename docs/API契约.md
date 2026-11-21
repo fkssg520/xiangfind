@@ -32,6 +32,18 @@
 | POST | `/api/auth/reset-password` | 公开 | 用验证码改密码，**会踢掉该用户所有会话** |
 | GET | `/api/me` | 登录 | 当前用户 |
 
+### 后台用户对象（`GET /api/admin/users`）
+
+```json
+{ "id": "usr_x", "studentId": "20230001", "name": "演示同学", "email": "a@b.c",
+  "role": "student", "status": "active", "itemCount": 3,
+  "isVolunteer": false, "storagePoints": [{ "id": "stp_x", "name": "图书馆一楼服务台" }],
+  "emailVerified": true, "emailVerifiedAt": "2026-11-10T08:00:00.000Z",
+  "createdAt": "2026-11-10T08:00:00.000Z" }
+```
+
+`emailVerified` 是布尔值，`emailVerifiedAt` 为 null 表示未验证。
+管理员据此能看出"哪些账号还没验证、因而不能发布"。
 ### POST /api/auth/register
 
 ```json
