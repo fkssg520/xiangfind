@@ -107,7 +107,7 @@ try {
                 'detail'    { $ok = ($r.title -and [int]$r.rows -ge 5) }
                 'claim'     { $ok = ($r.modal -eq $true) }
                 'publish'   { $ok = ($r.moved -eq $true -and $r.title -like '*E2E*') }
-                'admin'     { $ok = ($r.tabs.Count -eq 5 -and [int]$r.kpis -gt 0) }
+                'admin'     { $ok = ($r.tabs.Count -ge 5 -and [int]$r.kpis -gt 0) }
                 'forbidden' { $ok = ($r.guarded -eq $true) }
                 default     { $ok = $true }
             }

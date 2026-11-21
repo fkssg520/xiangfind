@@ -1293,6 +1293,7 @@ async function loadUnread() {
 }
 
 /* ---------- 管理后台 ---------- */
+let adminUserQuery = ''; // 用户搜索关键词（跨重渲染保留）
 const ADMIN_KPIS = [
   ['users', '注册用户'],
   ['volunteers', '志愿者'],
@@ -1324,7 +1325,7 @@ async function loadAdmin(tab) {
   const tabs = el('div', 'admin-tabs');
   const pane = el('div', 'admin-pane');
 
-  const TABS = [['overview', '概览'], ['claims', '审核'], ['items', '信息'], ['users', '用户'], ['points', '存放点']];
+  const TABS = [['overview', '概览'], ['claims', '审核'], ['items', '信息'], ['users', '用户'], ['points', '存放点'], ['data', '数据']];
   const show = (key) => {
     [...tabs.children].forEach((b) => b.classList.toggle('on', b.dataset.tab === key));
     pane.replaceChildren(el('div', 'skeleton'));
@@ -1438,39 +1439,67 @@ async function renderAdminPane(key, pane) {
     }
 
     if (key === 'users') {
-      const r = await api('/admin/users');
+      const bar = el('div', 'admin-bar');
+      const qInput = document.createElement('input');
+      qInput.className = 'input admin-search';
+      qInput.placeholder = '搜学号 / 邮箱 / 姓名';
+      qInput.value = adminUserQuery;
+      let timer = null;
+      qInput.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          adminUserQuery = qInput.value.trim();
+          renderAdminPane('users', pane);
+        }, 260);
+      });
+      bar.append(qInput);
+      if (adminUserQuery) {
+        bar.append(adminAct('清空', () => { adminUserQuery = ''; renderAdminPane('users', pane); }, true));
+      }
+
+      const r = await api('/admin/users' + (adminUserQuery ? '?q=' + encodeURIComponent(adminUserQuery) : ''));
       if (!r.ok) return pane.replaceChildren(emptyBox('用户列表加载失败'));
       const rows = r.data.users || [];
       const me = currentUser;
 
-      pane.replaceChildren(adminTable(['姓名', '学号', '角色', '状态', '发布数', '操作'], rows, (u) => {
-        const tr = document.createElement('tr');
-        tr.append(el('td', 't', u.name || ''));
-        tr.append(el('td', 'sub', u.studentId || ''));
-        tr.append(el('td', 'sub', ROLE_TEXT[u.role] || u.role));
-        tr.append(el('td', 'sub', u.status === 'disabled' ? '已停用' : '正常'));
-        tr.append(el('td', 'sub', String(u.itemCount ?? '')));
+      const table = rows.length
+        ? adminTable(['姓名', '学号', '角色', '状态', '发布数', '操作'], rows, (u) => {
+          const tr = document.createElement('tr');
+          tr.append(el('td', 't', u.name || ''));
+          tr.append(el('td', 'sub', u.studentId || ''));
+          tr.append(el('td', 'sub', ROLE_TEXT[u.role] || u.role));
+          tr.append(el('td', 'sub', u.status === 'disabled' ? '已停用' : '正常'));
+          tr.append(el('td', 'sub', String(u.itemCount ?? '')));
 
-        const acts = document.createElement('td');
-        const isAdminRow = u.role === 'admin';
-        if (!isAdminRow) {
-          if (u.role === 'volunteer') {
-            acts.append(adminAct('取消志愿者', () => adminSetVolunteer(u, false, pane)));
-          } else {
-            acts.append(adminAct('设为志愿者', () => openVolunteerDialog(u, pane)));
+          const acts = document.createElement('td');
+          const isAdminRow = u.role === 'admin';
+          if (!isAdminRow) {
+            if (u.role === 'volunteer') {
+              acts.append(adminAct('取消志愿者', () => adminSetVolunteer(u, false, pane)));
+            } else {
+              acts.append(adminAct('设为志愿者', () => openVolunteerDialog(u, pane)));
+            }
+            acts.append(adminAct('重置密码', () => adminResetPassword(u, pane)));
+            if (u.id === me?.id) {
+              acts.append(adminAct('停用', () => {}, true));
+            } else if (u.status === 'disabled') {
+              acts.append(adminAct('启用', () => adminSetStatus(u.id, 'active', pane)));
+            } else {
+              acts.append(adminAct('停用', () => adminSetStatus(u.id, 'disabled', pane), true));
+            }
           }
-          acts.append(adminAct('重置密码', () => adminResetPassword(u, pane)));
-          if (u.id === me?.id || isAdminRow) {
-            acts.append(adminAct('停用', () => {}, true));
-          } else if (u.status === 'disabled') {
-            acts.append(adminAct('启用', () => adminSetStatus(u.id, 'active', pane)));
-          } else {
-            acts.append(adminAct('停用', () => adminSetStatus(u.id, 'disabled', pane), true));
-          }
-        }
-        tr.append(acts);
-        return tr;
-      }));
+          tr.append(acts);
+          return tr;
+        })
+        : emptyBox(adminUserQuery ? '没有匹配的用户' : '还没有用户');
+
+      const wrap = el('div', 'admin-page');
+      wrap.append(bar, table);
+      pane.replaceChildren(wrap);
+      return;
+    }
+    if (key === 'data') {
+      renderDataPane(pane);
       return;
     }
 
@@ -1481,8 +1510,9 @@ async function renderAdminPane(key, pane) {
 
     const headBar = el('div', 'admin-bar');
     headBar.append(adminAct('+ 新增存放点', () => openPointDialog(pane)));
-    const table = adminTable(['名称', '类型', '地址', '时间', '在库', '状态', '操作'], rows, (p) => {
+    const table = adminTable(['序', '名称', '类型', '地址', '时间', '在库', '状态', '操作'], rows, (p) => {
       const tr = document.createElement('tr');
+      tr.append(el('td', 'sub', String(p.sortOrder ?? 0)));
       tr.append(el('td', 't', p.name || ''));
       tr.append(el('td', 'sub', p.type === 'security' ? '保卫处' : '普通'));
       tr.append(el('td', 'sub', p.address || ''));
@@ -1490,6 +1520,9 @@ async function renderAdminPane(key, pane) {
       tr.append(el('td', 'sub', String(p.itemCount ?? 0)));
       tr.append(el('td', 'sub', p.enabled === false ? '已停用' : '启用中'));
       const acts = document.createElement('td');
+      const pos = rows.indexOf(p);
+      acts.append(adminAct('↑', () => adminMovePoint(rows, pos, -1, pane), pos === 0));
+      acts.append(adminAct('↓', () => adminMovePoint(rows, pos, 1, pane), pos === rows.length - 1));
       acts.append(adminAct(p.enabled === false ? '启用' : '停用',
         () => adminTogglePoint(p.id, p.enabled === false, pane), p.enabled !== false));
       tr.append(acts);
@@ -1884,4 +1917,108 @@ function openBroadcastDialog(pane) {
     toast(`已发送给 ${r.data.recipients} 人`);
     renderAdminPane('overview', pane);
   });
+}
+
+/* ---------- 数据页签：恢复演示 / 导出统计 / 重算匹配 ---------- */
+async function renderDataPane(pane) {
+  const box = el('div', 'admin-page');
+  const bar = el('div', 'admin-bar');
+  bar.append(
+    adminAct('重新计算匹配', () => adminRecomputeMatches(pane)),
+    adminAct('导出统计', () => adminShowStats(pane)),
+    adminAct('恢复演示数据', () => adminResetDemo(pane), true),
+  );
+  box.append(bar);
+  box.append(el('p', 'modal-hint', '「重新计算匹配」只重跑规则打分，不改物品状态；「恢复演示数据」会清空业务表并重新播种，操作前会二次确认。'));
+
+  const r = await api('/admin/stats');
+  if (!r.ok) {
+    box.append(emptyBox('统计加载失败'));
+    pane.replaceChildren(box);
+    return;
+  }
+  const s = r.data;
+  const grid = el('div', 'admin-kpis');
+  const push = (label, value) => {
+    const cell = el('div', 'admin-kpi');
+    cell.append(el('span', null, label));
+    cell.append(el('b', null, String(value)));
+    grid.append(cell);
+  };
+  push('信息总数', (s.items?.byStatus || []).reduce((a, x) => a + x.c, 0));
+  push('认领总数', (s.claims || []).reduce((a, x) => a + x.c, 0));
+  push('用户总数', (s.users || []).reduce((a, x) => a + x.c, 0));
+  box.append(grid);
+
+  const sections = [
+    ['按状态', s.items?.byStatus],
+    ['按分类', s.items?.byCategory],
+    ['按类型', s.items?.byType],
+    ['认领状态', s.claims],
+    ['近 7 日新增', s.daily],
+    ['用户角色', s.users],
+  ];
+  sections.forEach(([title, list]) => {
+    if (!Array.isArray(list) || !list.length) return;
+    box.append(el('h3', 'admin-sub', title));
+    const rows = list.map((x) => {
+      const key = x.status || x.category || x.type || x.day || x.role || '';
+      return `${key}：${x.c}`;
+    });
+    box.append(el('p', 'modal-hint', rows.join('　|　')));
+  });
+
+  const dl = el('button', 'btn btn-ghost btn-sm', '下载 JSON');
+  dl.type = 'button';
+  dl.addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(s, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'xiangfind-stats-' + new Date().toISOString().slice(0, 10) + '.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+    toast('已导出 JSON');
+  });
+  box.append(dl);
+  pane.replaceChildren(box);
+}
+
+async function adminShowStats(pane) {
+  renderDataPane(pane);
+}
+
+async function adminRecomputeMatches(pane) {
+  if (!confirm('重新计算全部匹配？只重跑打分与通知，不改物品状态。')) return;
+  const r = await api('/admin/recompute-matches', { method: 'POST' });
+  if (!r.ok) { toast(errText(r, '重算失败')); return; }
+  const d = r.data || {};
+  toast(`已重算：扫描 ${d.scanned ?? 0}，更新 ${d.recomputed ?? 0}，跳过 ${d.skipped ?? 0}`);
+  if (Array.isArray(d.failures) && d.failures.length) {
+    console.warn('[湘寻] 重算失败项：', d.failures);
+  }
+}
+
+async function adminResetDemo(pane) {
+  if (!confirm('恢复演示数据会清空当前所有业务数据（物品、认领、消息、收藏），只保留账号。确定吗？')) return;
+  if (!confirm('再确认一次：这是不可撤销的操作，演示前才用。继续？')) return;
+  const r = await api('/admin/reset-demo', { method: 'POST' });
+  if (!r.ok) { toast(errText(r, '恢复失败')); return; }
+  toast('演示数据已恢复');
+  renderDataPane(pane);
+}
+
+/* 上移/下移：和相邻项交换 sortOrder */
+async function adminMovePoint(rows, pos, delta, pane) {
+  const target = pos + delta;
+  if (target < 0 || target >= rows.length) return;
+  const a = rows[pos];
+  const b = rows[target];
+  const aOrder = Number(a.sortOrder) || 0;
+  const bOrder = Number(b.sortOrder) || 0;
+  const r1 = await api('/admin/storage-points/' + encodeURIComponent(a.id), { method: 'PATCH', body: { sortOrder: bOrder } });
+  if (!r1.ok) { toast(errText(r1, '排序失败')); return; }
+  const r2 = await api('/admin/storage-points/' + encodeURIComponent(b.id), { method: 'PATCH', body: { sortOrder: aOrder } });
+  if (!r2.ok) { toast(errText(r2, '排序失败')); return; }
+  toast('已调整顺序');
+  renderAdminPane('points', pane);
 }
