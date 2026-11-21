@@ -65,6 +65,11 @@ npm run dev                          # 或 npm start
 | `scripts\smoke-e2e.ps1` | **一键浏览器 E2E**（本机 Edge 无头，6 场景；需普通终端，受限环境跑不了） |
 | `scripts\push.ps1` | 一键推送（自动处理本机 SSH 走 443） |
 | `scripts\backup.ps1` | 备份数据库与上传目录（保留 7 日 + 4 周） |
+| `scripts\archive.mjs` | 数据保留：已归还 90 天归档、归档 1 年清除（默认预演） |
+| `scripts\overdue-remind.mjs` | 超期待领取提醒（默认预演，7 天内不重复） |
+| `scripts\demo-check.mjs` | 演示路径彩排（19 步，30 秒） |
+| `scripts\bench.mjs` | 容量基线（灌数据测列表/搜索/详情延迟） |
+| `scripts\clean-test-data.mjs` | 清理 E2E 残留数据（默认预演） |
 
 ## 接口一览
 
