@@ -47,6 +47,7 @@ export async function sendMail({ to, subject, text, html }) {
       text,
       ...(html ? { html } : {}),
     });
+    console.log(`[mail] sent to=${to} messageId=${info?.messageId || '-'} subject=${subject}`);
     return { delivered: true, messageId: info?.messageId };
   } catch (err) {
     console.error('[mail] 发送失败：', err.message);

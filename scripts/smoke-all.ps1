@@ -1,5 +1,7 @@
 ﻿# 跑全部冒烟：每个套件独立数据库 + 独立端口，互不污染
 # 用法：powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-all.ps1
+# 冒烟/测试禁用 .env：验证码要打在日志里才能被脚本读到
+$env:XF_NO_DOTENV = '1'
 $ErrorActionPreference = 'Continue'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot

@@ -25,7 +25,7 @@
 
 ```powershell
 npm install                          # 只有 nodemailer 一个依赖
-Copy-Item .env.example .env          # 然后填 SESSION_SECRET
+Copy-Item .env.example .env      # 服务启动时会自动读取（已存在的环境变量优先）          # 然后填 SESSION_SECRET
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"   # 生成密钥填进 .env
 
 npm run db:migrate                   # 建表（可重复执行）

@@ -2,6 +2,10 @@
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { existsSync, mkdirSync, readFileSync, statfsSync } from 'node:fs';
+import { loadDotEnv } from './lib/env.js';
+// 测试/冒烟场景用 XF_NO_DOTENV=1 跳过 .env：
+// 否则本地配好 SMTP 后，验证码会真发邮件而不是打在日志里，冒烟脚本就读不到码了。
+if (!process.env.XF_NO_DOTENV) loadDotEnv();
 import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
