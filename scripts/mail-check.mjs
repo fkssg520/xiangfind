@@ -17,7 +17,8 @@ if (existsSync(envPath)) {
 }
 
 const to = process.argv[2];
-const required = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'MAIL_FROM'];
+// MAIL_FROM 可留空：mailer 会自动回退到 SMTP_USER（QQ/163 要求发件人与登录邮箱一致）
+const required = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD'];
 const missing = required.filter((k) => !process.env[k]);
 
 console.log('\n=== 邮件通道自检 ===');
@@ -25,7 +26,7 @@ console.log('  SMTP_HOST  :', process.env.SMTP_HOST || '(未配置)');
 console.log('  SMTP_PORT  :', process.env.SMTP_PORT || '(未配置)');
 console.log('  SMTP_USER  :', process.env.SMTP_USER || '(未配置)');
 console.log('  SMTP_PASSWORD:', process.env.SMTP_PASSWORD ? `已配置（${process.env.SMTP_PASSWORD.length} 位）` : '(未配置)');
-console.log('  MAIL_FROM  :', process.env.MAIL_FROM || '(未配置)');
+console.log('  MAIL_FROM  :', process.env.MAIL_FROM || (process.env.SMTP_USER ? process.env.SMTP_USER + '（未配置，自动用 SMTP_USER）' : '(未配置)'));
 
 if (missing.length) {
   console.log('');

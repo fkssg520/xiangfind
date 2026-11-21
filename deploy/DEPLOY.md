@@ -4,6 +4,10 @@
 > 本文档按「一台 Ubuntu 云服务器 + 域名 + HTTPS」写。
 > **没有服务器、想今天就拿到公网地址 → 看 [`TUNNEL.md`](TUNNEL.md)（Cloudflare 隧道，免费，10 分钟）。**
 
+> **邮件（可选但建议）**：`.env` 里填 `SMTP_*` 四项，发件人邮箱必须与 `SMTP_USER` 一致
+> （`MAIL_FROM` 留空会自动用 `SMTP_USER`）。QQ/163 用**授权码**而不是登录密码。
+> 详细排查见 [`docs/A-02-邮件配置.md`](../docs/A-02-邮件配置.md)。
+> 不配也能跑：验证码打在 `journalctl -u xiangfind | grep mail`。
 ## 最快路径：一条命令
 
 ```bash
