@@ -18,6 +18,32 @@
 
 ---
 
+## ⚠️ 先看这个：UDP 被封时 QUIC 会失败
+
+实测（2026-11-21，本机校园网）：
+
+```
+INF Requesting new quick Tunnel on trycloudflare.com...
+INF |  https://xxx.trycloudflare.com  |        ← 域名拿到了
+ERR Failed to dial a quic connection ... timeout
+INF |  UDP Connectivity  region1.v2.argotunnel.com  FAIL  QUIC connection failed
+```
+
+**域名拿到了，但隧道从来没连上**——这是最坏的一种失败：看着像成功，访问却 000。
+
+解法：强制走 TCP（`--protocol http2`）。
+
+```powershell
+cloudflared tunnel --protocol http2 --url http://127.0.0.1:3000
+```
+
+加上之后立刻注册成功：
+
+```
+INF Registered tunnel connection ... protocol=http2 location=lax13
+```
+
+`scripts/tunnel-up.ps1` **默认就用 http2**，不用手动加。想试 QUIC 传 `-Protocol quic`。
 ## 五分钟起步（临时域名，够演示用）
 
 ### 1. 装 cloudflared
