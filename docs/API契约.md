@@ -45,8 +45,12 @@
 
 ```json
 { "id": "usr_x", "studentId": "20230001", "name": "张三", "email": "a@b.c",
-  "role": "student", "isVolunteer": false, "emailVerified": true }
+  "role": "student", "isVolunteer": false, "emailVerified": true,
+  "storagePoints": [] }
 ```
+
+`storagePoints` 仅志愿者非空，形如 `[{ "id": "stp_x", "name": "图书馆一楼服务台", "type": "normal" }]`。
+前端可用它**提前**判断"能确认哪些存放点的入库"，不必点一次再吃 403。
 
 ---
 
@@ -129,6 +133,13 @@
 
 **确认入库（`stored`）权限**：所属存放点志愿者、管理员、保卫处（仅 security 点）。
 **发布者本人不能确认入库**（需求基线 §3）。
+
+无权限时返回两种 403，前端可区分：
+
+| code | 含义 | message |
+|---|---|---|
+| `forbidden` | 角色本来就无权改这条物品 | 无权修改他人发布的信息 |
+| `not_assigned_to_point` | 是志愿者/保卫处，但不是这个存放点的人 | 你不是该存放点的志愿者，无法确认入库 |
 
 ---
 

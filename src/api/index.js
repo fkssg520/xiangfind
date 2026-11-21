@@ -15,7 +15,7 @@ import { verifyCsrf } from '../lib/csrf.js';
 import {
   SESSION_COOKIE, SESSION_TTL_MS, createSession, destroySession, getSessionUser,
 } from '../lib/session.js';
-import { register, resendCode, verifyEmail, login, publicUser, forgotPassword, resetPassword } from '../services/auth.js';
+import { register, resendCode, verifyEmail, login, publicUser, forgotPassword, resetPassword, volunteerPoints } from '../services/auth.js';
 import { listItems, getItem, createItem, patchItem, toggleFavorite } from '../services/items.js';
 
 const WRITE_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
@@ -202,7 +202,7 @@ export async function handleApi(req, res, ctx) {
       fail(res, 401, 'unauthenticated', '请先登录');
       return true;
     }
-    json(res, 200, { user: publicUser(user) });
+    json(res, 200, { user: { ...publicUser(user), storagePoints: volunteerPoints(db, user.id, user.role) } });
     return true;
   }
 

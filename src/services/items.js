@@ -322,7 +322,16 @@ export function patchItem(db, id, { viewer, body }) {
   const canConfirmStorage = isAdmin || isVolunteerForPoint || isSecurityForPoint;
 
   if (!isOwner && !isAdmin && !isVolunteerForPoint && !isSecurityForPoint) {
-    return { status: 403, body: { error: { code: 'forbidden', message: '无权修改他人发布的信息' } } };
+    // 区分两种 403：角色本来就无权 vs 是该角色但不属于这个存放点（文案不能误导）
+    const isWrongPoint = (viewer.role === 'volunteer' || viewer.role === 'security') && item.storage_point_id;
+    return {
+      status: 403,
+      body: {
+        error: isWrongPoint
+          ? { code: 'not_assigned_to_point', message: '你不是该存放点的志愿者，无法确认入库' }
+          : { code: 'forbidden', message: '无权修改他人发布的信息' },
+      },
+    };
   }
 
   const sets = [];
