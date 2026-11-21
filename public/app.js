@@ -98,7 +98,18 @@ function cardOf(item) {
   top.append(statusBadge(item));
   card.append(top);
 
-  card.append(el('div', 'thumb', item.category || '物品'));
+  const cardImg = (item.images || [])[0];
+  if (cardImg) {
+    const th = el('div', 'thumb has-img');
+    const im = document.createElement('img');
+    im.src = cardImg.url || ('/uploads/' + cardImg.fileName);
+    im.alt = item.title || '';
+    im.loading = 'lazy';
+    th.append(im);
+    card.append(th);
+  } else {
+    card.append(el('div', 'thumb', item.category || '物品'));
+  }
   card.append(el('h3', null, item.title || '未命名物品'));
 
   if (item.summary) card.append(el('p', 'summary', item.summary));
@@ -112,7 +123,20 @@ function cardOf(item) {
   const foot = el('div', 'foot');
   foot.append(el('span', 'who', item.author?.name || '匿名'));
   if (item.author?.isVolunteer) foot.append(el('span', 'vol', '志愿者'));
-  foot.append(el('span', 'fav', item.isFavorited ? '★' : '☆'));
+  const fav = el('span', 'fav', item.isFavorited ? '★' : '☆');
+  fav.title = item.isFavorited ? '取消收藏' : '收藏';
+  fav.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (!currentUser) { toast('登录后才能收藏'); location.hash = '#/login'; return; }
+    const r = await api('/items/' + encodeURIComponent(item.id) + '/favorite', { method: 'POST' });
+    if (!r.ok) { toast(errText(r, '操作失败')); return; }
+    const now = typeof r.data?.isFavorited === 'boolean' ? r.data.isFavorited : !item.isFavorited;
+    item.isFavorited = now;
+    fav.textContent = now ? '★' : '☆';
+    fav.title = now ? '取消收藏' : '收藏';
+    toast(now ? '已收藏' : '已取消收藏');
+  });
+  foot.append(fav);
   card.append(foot);
 
   return card;
@@ -290,7 +314,21 @@ function buildDetail(item, id) {
 
   /* 左：主信息 */
   const main = el('div', 'detail-main');
-  main.append(el('div', 'detail-media', item.category || '物品'));
+  const imgList = (item.images || []).filter((x) => x && (x.url || x.fileName));
+  if (imgList.length) {
+    const media = el('div', 'detail-media has-img');
+    imgList.forEach((im) => {
+      const src = im.url || ('/uploads/' + im.fileName);
+      const img = document.createElement('img');
+      img.src = src;
+      img.alt = item.title || '物品图片';
+      img.loading = 'lazy';
+      media.append(img);
+    });
+    main.append(media);
+  } else {
+    main.append(el('div', 'detail-media', item.category || '物品'));
+  }
 
   const head = el('div', 'detail-head');
   head.append(el('span', `type-tag ${item.type}`, TYPE_LABEL[item.type] || '?'));
@@ -409,6 +447,24 @@ function buildDetail(item, id) {
     box.append(listBox);
     side.append(box);
     loadClaimList(item.id, listBox);
+  }
+
+  // 联系方式：认领通过后（ready_for_pickup / returned）接口才会给，只对双方可见
+  if (item.contact) {
+    const cbox = el('div', 'side-card');
+    cbox.append(el('h2', null, '联系方式'));
+    cbox.append(el('p', 'modal-hint', '认领已通过，以下信息只对双方可见，请勿外传。'));
+    const ckv = el('div', 'kv-list');
+    const crow = (k, v) => {
+      const r = el('div', 'kv-row');
+      r.append(el('span', 'k', k), el('span', 'v', v || '未填写'));
+      ckv.append(r);
+    };
+    crow('姓名', item.contact.name);
+    crow('邮箱', item.contact.email);
+    crow('电话', item.contact.phone);
+    cbox.append(ckv);
+    side.append(cbox);
   }
 
   const matches = item.matches || [];
@@ -648,6 +704,67 @@ function bindPublish() {
 
   valueSel.addEventListener('change', refreshPoints);
 
+  // ---- 图片上传（最多 3 张、单张 5MB、JPEG/PNG/WebP）----
+  const imgInput = document.getElementById('pub-images');
+  const previewBox = document.getElementById('pub-previews');
+  const MAX_IMAGES = 3;
+  const MAX_SIZE = 5 * 1024 * 1024;
+  const OK_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+  let uploaded = [];
+
+  function paintPreviews() {
+    previewBox.replaceChildren();
+    uploaded.forEach((f, i) => {
+      const cell = el('div', 'pub-preview');
+      const im = document.createElement('img');
+      im.src = f.url;
+      im.alt = '';
+      cell.append(im);
+      const del = el('button', 'pub-preview-del', '×');
+      del.type = 'button';
+      del.title = '移除这张';
+      del.addEventListener('click', () => {
+        uploaded.splice(i, 1);
+        paintPreviews();
+      });
+      cell.append(del);
+      previewBox.append(cell);
+    });
+  }
+
+  imgInput?.addEventListener('change', async () => {
+    const picked = [...imgInput.files];
+    imgInput.value = '';
+    if (!picked.length) return;
+
+    if (uploaded.length + picked.length > MAX_IMAGES) {
+      toast(`最多 ${MAX_IMAGES} 张图片`);
+      return;
+    }
+    const badType = picked.find((f) => !OK_TYPES.includes(f.type));
+    if (badType) { toast('只支持 JPEG / PNG / WebP'); return; }
+    const tooBig = picked.find((f) => f.size > MAX_SIZE);
+    if (tooBig) { toast('单张不能超过 5MB'); return; }
+
+    const fd = new FormData();
+    picked.forEach((f) => fd.append('files', f));
+    previewBox.append(el('span', 'pub-hint', '上传中…'));
+
+    const res = await fetch('/api/uploads', {
+      method: 'POST',
+      headers: { 'x-csrf-token': csrfToken() },
+      body: fd,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      paintPreviews();
+      toast(data?.error?.message || '上传失败');
+      return;
+    }
+    uploaded = uploaded.concat(data.files || []);
+    paintPreviews();
+    toast(`已上传 ${data.files?.length || 0} 张`);
+  });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     msg.hidden = true;
@@ -664,6 +781,7 @@ function bindPublish() {
       eventAt: form.elements.eventAt.value ? new Date(form.elements.eventAt.value).toISOString() : null,
       valueLevel: form.elements.valueLevel.value,
       storagePointId: type === 'found' ? form.elements.storagePointId.value : null,
+      images: uploaded.map((f) => f.fileName),
     };
 
     const r = await api('/items', { method: 'POST', body });
@@ -727,6 +845,7 @@ async function loadMe(tab) {
   info.append(el('b', null, user.name || user.studentId));
   info.append(el('span', 'me-meta',
     `${user.studentId} · ${ROLE_TEXT[user.role] || user.role}${user.isVolunteer ? ' · 志愿者' : ''}`));
+  info.append(el('span', 'me-meta', user.email ? ('邮箱：' + user.email + (user.emailVerified ? '（已验证）' : '（未验证）')) : '邮箱：未绑定'));
   head.append(info);
 
   const logout = el('button', 'btn btn-ghost btn-sm', '退出登录');

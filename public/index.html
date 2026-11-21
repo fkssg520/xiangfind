@@ -110,6 +110,12 @@
           <textarea class="input area" name="description" maxlength="500" rows="4" placeholder="外观、磨损、内容物……越具体越容易被认出来"></textarea>
         </label>
 
+        <label class="field">
+          <span>图片 <i>可选，最多 3 张，单张 ≤ 5MB</i></span>
+          <input class="input" id="pub-images" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+        </label>
+        <div class="pub-previews" id="pub-previews"></div>
+
         <p class="auth-msg" id="pub-msg" hidden></p>
         <div class="pub-actions">
           <button class="btn" type="submit">提交</button>
