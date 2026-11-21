@@ -582,3 +582,18 @@ main { max-width: var(--page-max); margin: 0 auto; padding: var(--s-32) var(--s-
   .admin-search { max-width: 100%; }
   .admin-table th:first-child, .admin-table td:first-child { display: none; }
 }
+
+/* ---------- 未验证邮箱入口 ---------- */
+.verify-chip {
+  border: 1px solid rgba(181,101,74,.35); background: rgba(212,163,115,.18);
+  color: #9a4c37; font-size: 12px; font-weight: 700; padding: 5px 10px;
+  border-radius: 999px; cursor: pointer; font-family: inherit; margin-right: 8px;
+}
+.verify-chip:hover { background: rgba(212,163,115,.30); }
+.unverified-tip {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  background: rgba(181,101,74,.10); border: 1px solid rgba(181,101,74,.28);
+  color: #9a4c37; border-radius: var(--radius-buttons); padding: 10px 14px; margin-bottom: 12px;
+  font-size: 13px;
+}
+@media (max-width: 760px) { .verify-chip { display: none; } }
