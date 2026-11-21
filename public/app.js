@@ -354,6 +354,27 @@ function buildDetail(item, id) {
   // 只在「自己发布的」或「当前可认领的」情况下显示按钮，避免出现禁用的死按钮
   if (item.isOwner || CLAIMABLE.has(item.status)) claim.append(cbtn);
 
+  // 待入库：志愿者/管理员/保卫处可以确认入库（他们没有后台权限，只能在这里点）
+  const STORAGE_ROLES = ['volunteer', 'admin', 'security'];
+  if (item.status === 'pending_storage' && currentUser && STORAGE_ROLES.includes(currentUser.role)) {
+    const store = el('button', 'btn btn-ghost', '确认已入库');
+    store.type = 'button';
+    store.style.marginTop = '10px';
+    store.addEventListener('click', async () => {
+      store.disabled = true;
+      const r = await api('/items/' + encodeURIComponent(item.id), { method: 'PATCH', body: { status: 'stored' } });
+      store.disabled = false;
+      if (!r.ok) {
+        toast(errText(r, '操作失败'));
+        if (r.status === 403) store.remove();
+        return;
+      }
+      toast('已确认入库');
+      loadDetail(item.id);
+    });
+    claim.append(store);
+  }
+
   // 待领取：只有所属存放点的志愿者或管理员能确认归还
   if (item.status === 'ready_for_pickup' && item.claim?.canReview) {
     const done = el('button', 'btn btn-ghost', '确认已归还');
