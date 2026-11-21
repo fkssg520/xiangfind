@@ -1,7 +1,8 @@
 // 容量基线：灌 N 条物品后测列表/详情接口延迟，回答"能撑多少数据"
 // 用法：
 //   node scripts/bench.mjs                     # 用当前库直接测
-//   node scripts/bench.mjs --seed 2000         # 先灌 2000 条再测（会写入 items 表）
+//   node scripts/bench.mjs --seed 2000         # 先灌 2000 条再测（会写入 items 表，注意目标库）
+//   node scripts/bench.mjs --clean             # 清理 itm_bench_ 压测数据
 //   node scripts/bench.mjs --base http://127.0.0.1:3000 --rounds 50
 // 说明：只读测试，不改数据（--seed 除外）。测的是单进程 + SQLite 的实际表现。
 import { DatabaseSync } from 'node:sqlite';
@@ -15,10 +16,43 @@ const ROUNDS = num('--rounds', 50);
 const SEED = num('--seed', 0);
 
 const DB_PATH = resolve(process.env.DATABASE_PATH || './data/xiangfind.db');
+const CLEAN = args.includes('--clean');
+
+// 0) 清理压测数据（itm_bench_ 前缀），不影响真实数据
+if (CLEAN) {
+  if (!existsSync(DB_PATH)) { console.error(`数据库不存在：${DB_PATH}`); process.exit(1); }
+  const db = new DatabaseSync(DB_PATH);
+  const rows = db.prepare("SELECT id FROM items WHERE id LIKE 'itm_bench_%'").all();
+  db.exec('BEGIN');
+  try {
+    for (const r of rows) {
+      db.prepare('DELETE FROM messages WHERE related_id = ?').run(r.id);
+      db.prepare('DELETE FROM matches WHERE lost_item_id = ? OR found_item_id = ?').run(r.id, r.id);
+      db.prepare('DELETE FROM favorites WHERE item_id = ?').run(r.id);
+      db.prepare('DELETE FROM item_images WHERE item_id = ?').run(r.id);
+      db.prepare('DELETE FROM claims WHERE item_id = ?').run(r.id);
+    }
+    db.prepare("DELETE FROM items WHERE id LIKE 'itm_bench_%'").run();
+    db.exec('COMMIT');
+    console.log(`  已清理压测数据 ${rows.length} 条（库：${DB_PATH}）`);
+  } catch (err) {
+    db.exec('ROLLBACK');
+    console.error(`  ✗ 清理失败（已回滚）：${err.message}`);
+    process.exit(1);
+  }
+  db.close();
+  process.exit(0);
+}
 
 // 1) 可选：灌数据
 if (SEED > 0) {
   if (!existsSync(DB_PATH)) { console.error(`数据库不存在：${DB_PATH}`); process.exit(1); }
+  // 明确告知写入目标，避免误灌演示库（2026-11-21 实际发生过：灌了 2000 条进 demo 库）
+  console.log(`  目标库：${DB_PATH}`);
+  if (!process.env.DATABASE_PATH) {
+    console.log('  ⚠ 未设置 DATABASE_PATH，用的是默认 ./data/xiangfind.db（通常就是演示库）');
+    console.log('    测完请清理：node scripts/bench.mjs --clean');
+  }
   const db = new DatabaseSync(DB_PATH);
   const user = db.prepare("SELECT id FROM users LIMIT 1").get();
   const point = db.prepare("SELECT id FROM storage_points WHERE type = 'normal' LIMIT 1").get();
