@@ -12,6 +12,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { handleApi } from './api/index.js';
 import { ensureCsrf } from './lib/csrf.js';
 import { uploadsDir, ensureUploadDir } from './services/uploads.js';
+import { mailState } from './lib/mail-state.js';
 
 const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
 const PUBLIC_DIR = join(ROOT, 'public');
@@ -150,6 +151,7 @@ async function route(req, res) {
       items: itemCount,
       diskFreeMB,
       uploads: existsSync(uploadsDir()) ? 'ok' : 'missing',
+    mail: mailState(),
     });
   }
 

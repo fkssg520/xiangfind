@@ -37,7 +37,19 @@
 ```json
 { "studentId": "20230001", "name": "张三", "email": "a@b.c", "password": "demo1234", "confirmPassword": "demo1234" }
 ```
-→ `201 { "user": {...}, "codeSent": true, "delivery": "email" | "smtp_not_configured" }`
+→ `201 { "user": {...}, "codeSent": true, "delivery": "email" | "smtp_not_configured", "fallback": null }`
+
+**`codeSent` 只在邮件真正发出时为 `true`**（即 `delivery === "email"`）。
+
+| 字段 | 含义 |
+|---|---|
+| `codeSent` | 用户能否收到验证码 |
+| `delivery` | `email` / `smtp_not_configured` / `nodemailer_missing` / `send_failed` / `cooldown` |
+| `fallback` | 发信失败时为 `"log"`，此时验证码打在服务端日志 `[mail:fallback] ... code=XXXXXX` |
+
+> 前端注意：`codeSent: false` 时必须提示「邮件发送失败，请稍后重试」，
+> **不能显示「验证码已发送」**——否则用户会等一封永远不来的信。
+> 演示现场若邮件通道故障，可从服务端日志取码救急。
 
 约束：学号 6-20 位字母数字且唯一；邮箱唯一；密码 8-64 位且含字母与数字。
 

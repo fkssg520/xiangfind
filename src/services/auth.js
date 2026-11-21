@@ -68,8 +68,12 @@ export async function register(db, body, ip) {
     status: 201,
     body: {
       user: { id: userId, studentId: data.studentId, name: data.name, email: data.email, role: 'student', emailVerified: false },
-      codeSent: true,
+      // codeSent 表示"用户真的能收到"：只有 delivered 才为 true。
+      // 之前恒为 true，发信失败时前端仍显示"验证码已发送"，用户会白等（QQ 535 就是这么暴露的）。
+      codeSent: Boolean(mail.delivered),
       delivery: mail.delivered ? 'email' : mail.reason,
+      // 兜底：发信失败时验证码打到服务端日志，便于现场救急
+      fallback: mail.delivered ? null : 'log',
     },
   };
 }
@@ -120,7 +124,7 @@ export async function resendCode(db, body, ip) {
   if (result.reason === 'daily_limit') {
     return { status: 429, body: { error: { code: 'daily_limit', message: '今天发送次数已达上限' } } };
   }
-  return { status: 200, body: { ok: true, delivery: result.delivered ? 'email' : result.reason } };
+  return { status: 200, body: { ok: true, codeSent: Boolean(result.delivered), delivery: result.delivered ? 'email' : result.reason, fallback: result.delivered ? null : 'log' } };
 }
 
 export function verifyEmail(db, body) {
