@@ -50,7 +50,8 @@ $harnessPublic = Join-Path $root 'public\__e2e-harness.html'
 
 Copy-Item (Join-Path $here 'harness.html') $harnessPublic -Force
 
-$profileDir = Join-Path $env:TEMP 'xf-e2e-edge'
+# 每次运行用独立 profile：多实例共用同一目录会互相锁住，Edge 直接挂死
+$profileDir = Join-Path $env:TEMP ("xf-e2e-edge-" + $PID)
 $pass = 0
 $fail = 0
 
