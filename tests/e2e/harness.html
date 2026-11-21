@@ -104,8 +104,15 @@ const SCENARIOS = {
     d.querySelector('.modal .btn-ghost')?.click();
     await wait(200);
 
-    // ④ 收尾：把夹具归档，不留在广场上
-    await apiCall('/api/items/' + target.id, { method: 'PATCH', body: JSON.stringify({ status: 'archived' }) });
+    // ④ 收尾：换回夹具作者（志愿者）再归档——用学生 session 归档别人的物品会 403
+    await apiCall('/api/auth/logout', { method: 'POST' });
+    await login(d, w, '20230002', 'demo1234');
+    const arch = await apiCall('/api/items/' + target.id, { method: 'PATCH', body: JSON.stringify({ status: 'archived' }) });
+    if (!arch.ok) {
+      const t = await arch.text();
+      throw new Error('夹具归档失败（HTTP ' + arch.status + '）：' + t.slice(0, 120));
+    }
+
 
     return { canClaim: true, item: target.id, modal };
   },
