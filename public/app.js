@@ -591,8 +591,60 @@ function renderUser() {
     btn.textContent = '登录';
     btn.href = '#/login';
   }
+
+  // 未验证邮箱：顶栏给一个常驻入口，避免关掉页面后无处可去
+  const chip = document.getElementById('verify-chip');
+  if (chip) {
+    if (!chip.dataset.bound) {
+      chip.dataset.bound = '1';
+      chip.addEventListener('click', () => startEmailVerify());
+    }
+    chip.hidden = !(currentUser && currentUser.emailVerified === false);
+  }
+
+}
+/* 未验证邮箱：从任何地方一键补验证（重发验证码 → 跳到验证表单） */
+async function startEmailVerify() {
+  if (!currentUser) { location.hash = '#/login'; return; }
+  if (!currentUser.email) {
+    toast('这个账号没有绑定邮箱，请联系管理员');
+    return;
+  }
+  const r = await api('/auth/resend-code', { method: 'POST', body: { email: currentUser.email } });
+  if (!r.ok) {
+    const retry = r.data?.error?.retryAfter || r.data?.retryAfter;
+    if (r.status === 429) {
+      toast(retry ? `发送太频繁，请 ${retry} 秒后再试` : '发送太频繁，稍后再试');
+    } else {
+      toast(errText(r, '发送失败'));
+    }
+    return;
+  }
+  sessionStorage.setItem('xf_pending_email', currentUser.email);
+  const box = document.getElementById('verify-email');
+  if (box) box.textContent = currentUser.email;
+  location.hash = '#/login';
+  showAuthForm('verify');
+  toast('验证码已发送，请查收邮箱');
 }
 
+/* 遇到 403 email_unverified 时统一处理：给出可点击的补救入口 */
+function handleUnverified(r) {
+  if (r && r.status === 403 && r.data?.error?.code === 'email_unverified') {
+    const box = el('div', 'unverified-tip');
+    box.append(el('b', null, '需要先验证邮箱'));
+    const go = el('button', 'btn btn-sm', '去验证');
+    go.type = 'button';
+    go.style.marginLeft = '10px';
+    go.addEventListener('click', () => startEmailVerify());
+    box.append(go);
+    const host = document.querySelector('.page, main') || document.body;
+    host.prepend(box);
+    setTimeout(() => box.remove(), 8000);
+    return true;
+  }
+  return false;
+}
 async function refreshMe() {
   const r = await api('/me');
   currentUser = r.ok ? r.data.user : null;
@@ -914,6 +966,7 @@ function bindPublish() {
       return;
     }
     if (!r.ok) {
+      if (handleUnverified(r)) return;
       msg.hidden = false;
       msg.textContent = errText(r, '提交失败，检查一下必填项');
       return;
@@ -967,6 +1020,13 @@ async function loadMe(tab) {
   info.append(el('span', 'me-meta',
     `${user.studentId} · ${ROLE_TEXT[user.role] || user.role}${user.isVolunteer ? ' · 志愿者' : ''}`));
   info.append(el('span', 'me-meta', user.email ? ('邮箱：' + user.email + (user.emailVerified ? '（已验证）' : '（未验证）')) : '邮箱：未绑定'));
+  if (user.emailVerified === false) {
+    const goVerify = el('button', 'btn btn-ghost btn-sm', '去验证邮箱');
+    goVerify.type = 'button';
+    goVerify.style.marginTop = '6px';
+    goVerify.addEventListener('click', () => startEmailVerify());
+    info.append(goVerify);
+  }
   head.append(info);
 
   const logout = el('button', 'btn btn-ghost btn-sm', '退出登录');
