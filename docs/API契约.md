@@ -257,7 +257,7 @@
 | POST | `/api/admin/messages` | 群发系统消息 |
 | GET | `/api/admin/stats` | 导出统计 |
 | POST | `/api/admin/recompute-matches` | 重算全部匹配（§7「数据修正后刷新」） |
-| POST | `/api/admin/reset-demo` | 恢复演示数据（破坏性） |
+| POST | `/api/admin/reset-demo` | 恢复演示数据（破坏性：**清空全部物品/认领/消息/匹配/收藏后重新播种**，保留账号、存放点、审计日志；见 D-016） |
 | GET | `/api/admin/audit-logs?limit=50` | 审计日志 |
 
 ### 关键请求体

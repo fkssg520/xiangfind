@@ -1,6 +1,11 @@
 // 演示数据（可复用）：seed.js 与「管理员恢复演示数据」共用
 // 所有写入都是 INSERT OR IGNORE + 固定 ID，可重复执行
+import { existsSync, unlinkSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { hashPassword } from '../lib/password.js';
+
+// 与 uploads.js 用同一套规则解析上传目录（resetDemo 清理孤儿文件用）
+const UPLOAD_DIR = () => resolve(process.env.UPLOAD_DIR || './uploads');
 
 const T0 = '2026-11-10T08:00:00.000Z';
 export const DEMO_PASSWORD = 'demo1234';
@@ -80,21 +85,39 @@ export function seedDemo(db) {
 
 // 恢复演示数据：只清演示账号名下/演示 ID 的数据，再重新灌一遍
 export function resetDemo(db) {
-  const inList = (arr) => arr.map(() => '?').join(',');
+  // 「恢复演示数据」= 回到已知的干净状态，不是只删几个固定 ID。
+  //
+  // 2026-11-21 修正：原实现只删 DEMO_ITEM_IDS，而演示账号（20230001 等）在测试时
+  // 新建的物品不会被删——公网实例上因此残留了 20 多条「按钮条件失物进行中」这类测试数据，
+  // 点「恢复演示数据」也清不掉，演示当天会很脏。
+  //
+  // 现在的语义：清空所有业务数据（物品/认领/消息/匹配/收藏/图片），然后重新播种。
+  // 保留：users（真实注册的账号）、storage_points（播种会 UPDATE/INSERT）、audit_logs（审计不可删）。
+  const imageFiles = db.prepare('SELECT file_name FROM item_images').all().map((r) => r.file_name);
+
   db.exec('BEGIN');
   try {
-    db.prepare(`DELETE FROM claims WHERE item_id IN (${inList(DEMO_ITEM_IDS)}) OR applicant_id IN (${inList(DEMO_USER_IDS)})`)
-      .run(...DEMO_ITEM_IDS, ...DEMO_USER_IDS);
-    db.prepare(`DELETE FROM messages WHERE user_id IN (${inList(DEMO_USER_IDS)}) OR related_id IN (${inList(DEMO_ITEM_IDS)})`)
-      .run(...DEMO_USER_IDS, ...DEMO_ITEM_IDS);
-    db.prepare(`DELETE FROM matches WHERE lost_item_id IN (${inList(DEMO_ITEM_IDS)}) OR found_item_id IN (${inList(DEMO_ITEM_IDS)})`)
-      .run(...DEMO_ITEM_IDS, ...DEMO_ITEM_IDS);
-    db.prepare(`DELETE FROM favorites WHERE item_id IN (${inList(DEMO_ITEM_IDS)})`).run(...DEMO_ITEM_IDS);
-    db.prepare(`DELETE FROM items WHERE id IN (${inList(DEMO_ITEM_IDS)})`).run(...DEMO_ITEM_IDS);
+    db.exec('DELETE FROM messages');
+    db.exec('DELETE FROM claims');
+    db.exec('DELETE FROM matches');
+    db.exec('DELETE FROM favorites');
+    db.exec('DELETE FROM item_images');
+    db.exec('DELETE FROM items');
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
     throw err;
   }
+
+  // 尽力删除已不再被引用的上传文件（失败不影响数据一致性）
+  for (const name of imageFiles) {
+    try {
+      const p = join(UPLOAD_DIR(), name);
+      if (existsSync(p)) unlinkSync(p);
+    } catch {
+      /* 留一个孤儿文件比中断恢复更安全 */
+    }
+  }
+
   return seedDemo(db);
 }
