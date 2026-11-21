@@ -89,6 +89,13 @@ const SCENARIOS = {
     const target = createdBody.item;
     if (!target) throw new Error('夹具创建失败：' + JSON.stringify(createdBody));
 
+    // ①.5 真实流程里志愿者要先确认入库，否则状态是 pending_storage——按后端规则不可认领
+    const stored = await apiCall('/api/items/' + target.id, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'stored' }),
+    });
+    if (!stored.ok) throw new Error('夹具确认入库失败：HTTP ' + stored.status);
+
     // ② 换学生登录
     await apiCall('/api/auth/logout', { method: 'POST' });
     await login(d, w, '20230001', 'demo1234');

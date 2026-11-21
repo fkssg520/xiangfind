@@ -344,7 +344,9 @@ renderCategories();
 resetAndLoad();
 
 /* ---------- 详情页 ---------- */
-const CLAIMABLE = new Set(['stored', 'pending_storage', 'open']);
+// 与后端 submitClaim 保持一致：只有「已存放」「认领中」的招领可以申请；失物不参与认领
+const CLAIMABLE = new Set(['stored', 'claim_pending']);
+const canClaimItem = (item) => Boolean(item) && item.type === 'found' && CLAIMABLE.has(item.status);
 
 async function loadDetail(id) {
   const root = document.getElementById('detail-root');
@@ -439,7 +441,7 @@ function buildDetail(item, id) {
     openClaimDialog(item, () => loadDetail(item.id));
   });
   // 只在「自己发布的」或「当前可认领的」情况下显示按钮，避免出现禁用的死按钮
-  if (item.isOwner || CLAIMABLE.has(item.status)) claim.append(cbtn);
+  if (item.isOwner || canClaimItem(item)) claim.append(cbtn);
 
   // 待入库：志愿者/管理员/保卫处可以确认入库（他们没有后台权限，只能在这里点）
   // /api/me 现在会返回志愿者绑定的存放点，能提前判断；拿不到时退回按角色显示 + 403 自愈
