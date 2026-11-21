@@ -26,7 +26,7 @@ const STATUS_MAP = {
 const TYPE_LABEL = { lost: '失', found: '招' };
 
 /* ---------- 视图路由 ---------- */
-const VIEWS = ['plaza', 'publish', 'item', 'me', 'messages', 'admin', 'login'];
+const VIEWS = ['plaza', 'publish', 'item', 'me', 'messages', 'admin', 'login', 'forgot'];
 
 function parseHash() {
   const raw = location.hash.replace(/^#\/?/, '');
@@ -77,7 +77,8 @@ function el(tag, className, text) {
 }
 
 /* ---------- 广场页 ---------- */
-const state = { type: 'all', q: '', category: 'all', items: [], total: 0, page: 1, loading: false, loaded: false, error: '' };
+const state = { type: 'all', q: '', category: 'all', status: 'all', valueLevel: 'all', storagePointId: 'all',
+  items: [], total: 0, page: 1, loading: false, loaded: false, error: '' };
 
 function statusBadge(item) {
   const table = STATUS_MAP[item.type] || {};
@@ -149,6 +150,9 @@ async function fetchItems({ append = false } = {}) {
   const params = new URLSearchParams();
   if (state.type !== 'all') params.set('type', state.type);
   if (state.category !== 'all') params.set('category', state.category);
+  if (state.status !== 'all') params.set('status', state.status);
+  if (state.valueLevel !== 'all') params.set('valueLevel', state.valueLevel);
+  if (state.storagePointId !== 'all') params.set('storagePointId', state.storagePointId);
   const q = state.q.trim();
   if (q) params.set('q', q);
   params.set('page', String(state.page));
@@ -278,6 +282,50 @@ function bindPlaza() {
     resetAndLoad();
   });
 
+  // ---------- 状态 / 贵重等级 / 存放点筛选 ----------
+  const fStatus = document.getElementById('f-status');
+  const fValue = document.getElementById('f-value');
+  const fPoint = document.getElementById('f-point');
+  const fReset = document.getElementById('f-reset');
+
+  const paintFilters = () => {
+    if (fStatus) fStatus.value = state.status;
+    if (fValue) fValue.value = state.valueLevel;
+    if (fPoint) fPoint.value = state.storagePointId;
+  };
+
+  fStatus?.addEventListener('change', () => { state.status = fStatus.value; resetAndLoad(); });
+  fValue?.addEventListener('change', () => { state.valueLevel = fValue.value; resetAndLoad(); });
+  fPoint?.addEventListener('change', () => { state.storagePointId = fPoint.value; resetAndLoad(); });
+
+  fReset?.addEventListener('click', () => {
+    state.type = 'all';
+    state.category = 'all';
+    state.status = 'all';
+    state.valueLevel = 'all';
+    state.storagePointId = 'all';
+    state.q = '';
+    const q = document.getElementById('q');
+    if (q) q.value = '';
+    [...document.querySelectorAll('#type-seg button')].forEach((b) => b.classList.toggle('on', b.dataset.type === 'all'));
+    renderCategories();
+    paintFilters();
+    resetAndLoad();
+  });
+
+  // 存放点下拉：公开接口，游客也能拿到
+  (async () => {
+    if (!fPoint) return;
+    const r = await api('/storage-points');
+    if (!r.ok) return;
+    (r.data.storagePoints || []).forEach((p) => {
+      const o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = p.name + (p.type === 'security' ? '（保卫处）' : '');
+      fPoint.append(o);
+    });
+    paintFilters();
+  })();
   document.getElementById('plaza-more')?.addEventListener('click', () => {
     state.page += 1;
     reloadPlaza({ append: true });
@@ -289,6 +337,7 @@ renderRoute();
 bindPlaza();
 bindAuth();
 bindPublish();
+bindForgot();
 refreshMe();
 loadUnread(); // mock 未读数；等 /api/messages 就绪后换真实接口
 renderCategories();
@@ -575,6 +624,76 @@ function busy(btn, on, label) {
   else if (btn.dataset.label) { btn.textContent = btn.dataset.label; }
 }
 
+/* ---------- 忘记密码 ---------- */
+function bindForgot() {
+  const send = document.getElementById('forgot-send');
+  if (!send) return;
+  const email = document.getElementById('forgot-email');
+  const code = document.getElementById('forgot-code');
+  const pass = document.getElementById('forgot-pass');
+  const pass2 = document.getElementById('forgot-pass2');
+  const msg1 = document.getElementById('forgot-msg1');
+  const msg2 = document.getElementById('forgot-msg2');
+  const step1 = document.getElementById('forgot-step1');
+  const step2 = document.getElementById('forgot-step2');
+  const submit = document.getElementById('forgot-submit');
+
+  send.addEventListener('click', async () => {
+    const value = (email.value || '').trim();
+    msg1.hidden = true;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      msg1.hidden = false;
+      msg1.textContent = '请输入正确的邮箱';
+      return;
+    }
+    send.disabled = true;
+    send.textContent = '发送中…';
+    const r = await api('/auth/forgot-password', { method: 'POST', body: { email: value } });
+    send.disabled = false;
+    send.textContent = '发送验证码';
+    if (!r.ok) {
+      msg1.hidden = false;
+      msg1.textContent = errText(r, '发送失败');
+      return;
+    }
+    step1.hidden = true;
+    step2.hidden = false;
+    toast(r.data?.delivery === 'log' ? '验证码已生成（开发环境见服务端日志）' : '验证码已发送，请查收邮件');
+  });
+
+  submit.addEventListener('click', async () => {
+    msg2.hidden = true;
+    const body = {
+      email: (email.value || '').trim(),
+      code: (code.value || '').trim(),
+      password: pass.value,
+      confirmPassword: pass2.value,
+    };
+    if (!/^\d{6}$/.test(body.code)) { msg2.hidden = false; msg2.textContent = '验证码为 6 位数字'; return; }
+    if (body.password.length < 8 || !/[A-Za-z]/.test(body.password) || !/\d/.test(body.password)) {
+      msg2.hidden = false; msg2.textContent = '密码需 8-64 位，且同时包含字母和数字'; return;
+    }
+    if (body.password !== body.confirmPassword) { msg2.hidden = false; msg2.textContent = '两次输入的密码不一致'; return; }
+
+    submit.disabled = true;
+    submit.textContent = '提交中…';
+    const r = await api('/auth/reset-password', { method: 'POST', body });
+    submit.disabled = false;
+    submit.textContent = '重置密码';
+    if (!r.ok) {
+      msg2.hidden = false;
+      msg2.textContent = errText(r, '重置失败');
+      return;
+    }
+    toast('密码已重置，请用新密码登录');
+    step1.hidden = false;
+    step2.hidden = true;
+    if (code) code.value = '';
+    if (pass) pass.value = '';
+    if (pass2) pass2.value = '';
+    location.hash = '#/login';
+  });
+}
 function bindAuth() {
   const tabs = document.getElementById('auth-tabs');
   tabs?.addEventListener('click', (e) => {
@@ -906,6 +1025,30 @@ async function renderPane(key, pane) {
         const table = STATUS_MAP[it.type] || {};
         const [label, tone] = table[it.status] || [it.status, 'muted'];
         row.append(el('span', `status ${tone}`, label));
+        // 编辑：未归档、未归还的都允许改标题/地点/描述
+        if (it.status !== 'archived' && it.status !== 'returned') {
+          const edit = el('span', 'admin-act', '编辑');
+          edit.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openEditItemDialog(it.id, pane);
+          });
+          row.append(edit);
+        }
+
+        // 标记找回：只针对「进行中的失物」
+        if (it.type === 'lost' && it.status === 'open') {
+          const done = el('span', 'admin-act', '标记找回');
+          done.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!confirm('标记为「已找回」？之后不再出现在广场的进行中列表。')) return;
+            const r = await api('/items/' + encodeURIComponent(it.id), { method: 'PATCH', body: { status: 'reunited' } });
+            if (!r.ok) { toast(errText(r, '操作失败')); return; }
+            toast('已标记找回');
+            renderPane('posts', pane);
+          });
+          row.append(done);
+        }
+
         if (it.status !== 'archived' && it.status !== 'returned') {
           const down = el('span', 'admin-act muted', '下架');
           down.addEventListener('click', async (e) => {
@@ -964,6 +1107,84 @@ const MSG_TEXT = { match: '匹配', claim: '认领', system: '系统' };
 
 // 已读语义（刻意如此，不是 bug）：进页面**不**自动标已读；
 // 点开单条 → 本地即时标记 + POST /api/messages/:id/read；「全部标为已读」逐条 POST。
+/* 编辑自己发布的信息：只改标题/地点/描述，状态变更走专门的按钮 */
+async function openEditItemDialog(itemId, pane) {
+  const r = await api('/items/' + encodeURIComponent(itemId));
+  if (!r.ok) { toast(errText(r, '读取失败')); return; }
+  const item = r.data.item;
+
+  const mask = el('div', 'modal-mask');
+  const box = el('div', 'modal');
+  box.append(el('h3', null, '编辑信息'));
+  box.append(el('p', 'modal-hint', '只改文字，不会改变状态；认领、入库等流程不受影响。'));
+
+  const fields = [
+    ['title', '标题', 'input', item.title || ''],
+    ['location', '地点', 'input', item.location || ''],
+  ];
+  const inputs = {};
+  fields.forEach(([key, label, kind, value]) => {
+    const wrap = el('label', 'field');
+    wrap.append(el('span', null, label));
+    const inp = document.createElement('input');
+    inp.className = 'input';
+    inp.value = value;
+    wrap.append(inp);
+    box.append(wrap);
+    inputs[key] = inp;
+  });
+
+  const descWrap = el('label', 'field');
+  descWrap.append(el('span', null, '描述'));
+  const ta = document.createElement('textarea');
+  ta.className = 'input area';
+  ta.value = item.description || '';
+  descWrap.append(ta);
+  box.append(descWrap);
+
+  const msg = el('p', 'auth-msg');
+  msg.hidden = true;
+  box.append(msg);
+
+  const acts = el('div', 'modal-actions');
+  const cancel = el('button', 'btn btn-ghost', '取消');
+  cancel.type = 'button';
+  const submit = el('button', 'btn', '保存');
+  submit.type = 'button';
+  acts.append(cancel, submit);
+  box.append(acts);
+  mask.append(box);
+  document.body.append(mask);
+
+  const close = () => mask.remove();
+  cancel.addEventListener('click', close);
+  mask.addEventListener('click', (e) => { if (e.target === mask) close(); });
+
+  submit.addEventListener('click', async () => {
+    const body = {
+      title: inputs.title.value.trim(),
+      location: inputs.location.value.trim(),
+      description: ta.value.trim(),
+    };
+    if (!body.title || !body.location || !body.description) {
+      msg.hidden = false;
+      msg.textContent = '标题、地点、描述都不能为空';
+      return;
+    }
+    submit.disabled = true;
+    const res = await api('/items/' + encodeURIComponent(itemId), { method: 'PATCH', body });
+    submit.disabled = false;
+    if (!res.ok) {
+      msg.hidden = false;
+      msg.textContent = errText(res, '保存失败');
+      return;
+    }
+    close();
+    toast('已保存');
+    if (pane) renderPane('posts', pane);
+    else loadDetail(itemId);
+  });
+}
 async function loadMessages() {
   const root = document.getElementById('messages-root');
   if (!root) return;
@@ -997,10 +1218,16 @@ async function loadMessages() {
   const pane = el('div', 'msg-list');
 
   const paint = () => {
-    const list = filter === 'unread' ? data.messages.filter((m) => !m.readAt) : data.messages;
+    const list = data.messages.filter((m) => {
+      if (filter === 'unread') return !m.readAt;
+      if (filter === 'system') return m.type === 'system';
+      if (filter === 'claim') return m.type === 'claim' || m.type === 'match';
+      return true;
+    });
+    const EMPTY_TEXT = { unread: '没有未读消息', system: '没有系统消息', claim: '没有认领或匹配消息' };
     pane.replaceChildren();
     if (!list.length) {
-      pane.append(emptyBox(filter === 'unread' ? '没有未读消息' : '还没有消息'));
+      pane.append(emptyBox(EMPTY_TEXT[filter] || '还没有消息'));
       return;
     }
     list.forEach((m) => {
@@ -1025,7 +1252,7 @@ async function loadMessages() {
     setUnread(data.messages.filter((x) => !x.readAt).length);
   };
 
-  [['all', '全部'], ['unread', '未读']].forEach(([k, label], i) => {
+  [['all', '全部'], ['unread', '未读'], ['system', '系统'], ['claim', '认领']].forEach(([k, label], i) => {
     const b = el('button', i === 0 ? 'on' : '', label);
     b.type = 'button';
     b.addEventListener('click', () => {
