@@ -355,8 +355,17 @@ function buildDetail(item, id) {
   if (item.isOwner || CLAIMABLE.has(item.status)) claim.append(cbtn);
 
   // 待入库：志愿者/管理员/保卫处可以确认入库（他们没有后台权限，只能在这里点）
+  // /api/me 现在会返回志愿者绑定的存放点，能提前判断；拿不到时退回按角色显示 + 403 自愈
   const STORAGE_ROLES = ['volunteer', 'admin', 'security'];
+  let canStore = false;
   if (item.status === 'pending_storage' && currentUser && STORAGE_ROLES.includes(currentUser.role)) {
+    const pts = currentUser.storagePoints;
+    if (currentUser.role === 'admin') canStore = true;
+    else if (currentUser.role === 'security') canStore = item.storagePoint?.type === 'security';
+    else if (Array.isArray(pts)) canStore = pts.some((p) => p.id === item.storagePoint?.id);
+    else canStore = true; // 还不知道绑定关系，先给按钮，点错由 403 兜底
+  }
+  if (canStore) {
     const store = el('button', 'btn btn-ghost', '确认已入库');
     store.type = 'button';
     store.style.marginTop = '10px';
