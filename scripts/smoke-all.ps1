@@ -57,6 +57,14 @@ $rOut | ForEach-Object { Write-Host $_ }
 $rLine = ($rOut | Select-String -Pattern '^结果：').Line
 $results += [pscustomobject]@{ 套件 = 'frontrefs'; 结果 = $rLine }
 
+# 1.0) 前端能力覆盖（需求 → 前端是否真的调用；防「后端有、前端没接」）
+Write-Host ''
+Write-Host '===== frontcov =====' -ForegroundColor Cyan
+$vOut = & node scripts/check-frontend-coverage.mjs 2>&1
+$vOut | ForEach-Object { Write-Host $_ }
+$vLine = ($vOut | Select-String -Pattern '^结果：').Line
+$results += [pscustomobject]@{ 套件 = 'frontcov'; 结果 = $vLine }
+
 foreach ($s in $suites) {
     $dbPath = Join-Path $repoRoot "data/smoke-$($s.name).db"
     $logPath = Join-Path $repoRoot "smoke-$($s.name).log"
