@@ -4,6 +4,7 @@ import { nowIso, ID } from '../lib/id.js';
 import { resetDemo } from '../db/demo.js';
 import { issuePasswordResetCode } from './auth.js';
 import { notify } from '../lib/notify.js';
+import { recomputeMatches } from './matching.js';
 
 function audit(db, actorId, action, targetType, targetId, summary) {
   db.prepare(
@@ -343,6 +344,44 @@ export function sendSystemMessage(db, viewer, body) {
 }
 
 // 导出统计（JSON，前端可自行转 CSV）
+// 需求基线 §7：「管理员后台提供重新计算匹配按钮，便于数据修正后刷新」
+// 逐条重算所有"活着"的物品（lost=open / found=stored），返回统计
+export function recomputeAllMatches(db, viewer) {
+  if (!requireAdmin(viewer)) return { status: 403, body: { error: { code: 'forbidden', message: '需要管理员权限' } } };
+
+  const rows = db
+    .prepare("SELECT id, type FROM items WHERE (type = 'lost' AND status = 'open') OR (type = 'found' AND status = 'stored')")
+    .all();
+
+  let recomputed = 0;
+  let skipped = 0;
+  let pairs = 0;
+  const failures = [];
+  for (const r of rows) {
+    try {
+      const out = recomputeMatches(db, r.id);
+      if (out?.skipped) { skipped += 1; continue; }
+      recomputed += 1;
+      if (typeof out?.matches === 'number') pairs += out.matches;
+    } catch (err) {
+      failures.push(`${r.id}: ${err.message}`);
+    }
+  }
+
+  audit(db, viewer.id, 'matching.recompute', 'system', '', `重算匹配：${recomputed} 条物品，${pairs} 对候选`);
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      scanned: rows.length,
+      recomputed,
+      skipped,
+      pairs,
+      failures: failures.slice(0, 10),
+    },
+  };
+}
+
 export function exportStats(db, viewer) {
   if (!requireAdmin(viewer)) return { status: 403, body: { error: { code: 'forbidden', message: '需要管理员权限' } } };
 

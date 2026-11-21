@@ -256,6 +256,7 @@
 | GET | `/api/admin/claims?status=pending\|all` | 跨物品的申请列表 |
 | POST | `/api/admin/messages` | 群发系统消息 |
 | GET | `/api/admin/stats` | 导出统计 |
+| POST | `/api/admin/recompute-matches` | 重算全部匹配（§7「数据修正后刷新」） |
 | POST | `/api/admin/reset-demo` | 恢复演示数据（破坏性） |
 | GET | `/api/admin/audit-logs?limit=50` | 审计日志 |
 
