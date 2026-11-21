@@ -54,27 +54,60 @@ const SCENARIOS = {
   },
 
   async claim() {
+    // 自己造夹具：志愿者发布一条招领 → 换学生登录认领。
+    // 不能靠 seed 数据（自己没有可认领的），更不能把 skipped 当通过（#76）。
     const { d, w } = await boot('#/login');
+    const csrfOf = () => {
+      const m = d.cookie.match(/xf_csrf=([^;]+)/);
+      return m ? decodeURIComponent(m[1]) : '';
+    };
+    const apiCall = (path, opts) => w.fetch(path, {
+      ...opts,
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json',
+        'x-csrf-token': csrfOf(),
+        ...(opts && opts.headers),
+      },
+    });
+
+    // ① 志愿者发布一条普通招领（图书馆点）
+    await login(d, w, '20230002', 'demo1234');
+    const created = await apiCall('/api/items', {
+      method: 'POST',
+      body: JSON.stringify({
+        type: 'found',
+        title: 'E2E 认领夹具 ' + String(Date.now()).slice(-6),
+        category: '其他',
+        description: '自动化夹具：蓝色折叠伞，伞柄黄色手绳，伞面右下角有一块补丁，伞骨断了一根。',
+        location: '图书馆三楼自习区',
+        valueLevel: 'normal',
+        storagePointId: 'stp_demo_lib',
+      }),
+    });
+    const createdBody = await created.json();
+    const target = createdBody.item;
+    if (!target) throw new Error('夹具创建失败：' + JSON.stringify(createdBody));
+
+    // ② 换学生登录
+    await apiCall('/api/auth/logout', { method: 'POST' });
     await login(d, w, '20230001', 'demo1234');
 
-    // 必须挑「别人发布、当前可认领」的招领——自己发的那种只会显示「管理这条信息」。
-    // 列表接口不返回 isOwner（只有详情有），所以用 /api/me 比作者 id。
-    const meRes = await w.fetch('/api/me', { headers: { accept: 'application/json' } });
-    const me = (await meRes.json()).user;
-    const res = await w.fetch('/api/items?pageSize=50', { headers: { accept: 'application/json' } });
-    const data = await res.json();
-    const cand = (data.items || []).find((i) => i.type === 'found'
-      && i.author && i.author.id !== me.id
-      && ['stored', 'open'].includes(i.status));
-    if (!cand) return { skipped: true, reason: '库里没有可认领的他人招领' };
-
-    w.location.hash = '#/item/' + cand.id;
+    // ③ 打开该物品认领
+    w.location.hash = '#/item/' + target.id;
     await wait(1600);
     const btn = d.querySelector('.claim-box .btn');
-    if (!btn || btn.disabled) return { skipped: true, reason: '按钮不可用', text: btn ? btn.textContent : null };
+    if (!btn || btn.disabled) throw new Error('认领按钮不可用：' + (btn ? btn.textContent : 'missing'));
     btn.click();
     await wait(600);
-    return { canClaim: true, item: cand.id, modal: Boolean(d.querySelector('.modal-mask')) };
+    const modal = Boolean(d.querySelector('.modal-mask'));
+    d.querySelector('.modal .btn-ghost')?.click();
+    await wait(200);
+
+    // ④ 收尾：把夹具归档，不留在广场上
+    await apiCall('/api/items/' + target.id, { method: 'PATCH', body: JSON.stringify({ status: 'archived' }) });
+
+    return { canClaim: true, item: target.id, modal };
   },
 
 
