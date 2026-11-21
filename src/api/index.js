@@ -9,7 +9,7 @@ import {
   overview as adminOverview, searchUsers as adminSearchUsers, setVolunteer,
   listStoragePoints, createStoragePoint, updateStoragePoint,
   listClaims as adminListClaims, resetDemoData, listAudit,
-  setUserStatus, sendPasswordReset, listItemsAdmin, sendSystemMessage, exportStats,
+  setUserStatus, sendPasswordReset, listItemsAdmin, sendSystemMessage, exportStats, recomputeAllMatches,
 } from '../services/admin.js';
 import { verifyCsrf } from '../lib/csrf.js';
 import {
@@ -366,6 +366,9 @@ export async function handleApi(req, res, ctx) {
     }
     if (path === '/api/admin/messages' && req.method === 'POST') {
       const out = sendSystemMessage(db, viewer, body); json(res, out.status, out.body); return true;
+    }
+    if (path === '/api/admin/recompute-matches' && req.method === 'POST') {
+      const out = recomputeAllMatches(db, viewer); json(res, out.status, out.body); return true;
     }
     if (path === '/api/admin/stats' && req.method === 'GET') {
       const out = exportStats(db, viewer); json(res, out.status, out.body); return true;
