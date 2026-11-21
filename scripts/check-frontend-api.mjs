@@ -38,18 +38,21 @@ for (const m of js.matchAll(/\bapi\(([^;]*?)\)\s*(?:\.|;|,|\n|\}|$)/g)) {
   rawArgs.push(arg.slice(0, cut).trim());
 }
 
-// 把实参表达式归一成路径：**只把引号外的代码**换成 §，引号内的字面量原样保留
-// 例：'/claims/' + encodeURIComponent(c.id) + '/decision'  →  /claims/§/decision  →  /claims/:id/decision
+// 把实参表达式归一成路径：引号外的代码记成 code 记号，引号内的字面量原样保留。
+// 规则要点：查询串不属于路径。若某个 code 记号后面紧跟的字面量以 '?' 开头
+// （例如 api('/admin/users' + (q ? '?q=' + f(q) : ''))），那段 code 只是三目条件，
+// 不是路径段——必须丢掉，否则会误报成 /api/admin/users:id。
 function argToPath(arg) {
-  let out = '';
+  const segs = []; // { type: 'lit' | 'code', v?: string }
   let i = 0;
   while (i < arg.length) {
     const ch = arg[i];
     if (ch === "'" || ch === '"' || ch === '`') {
       const quote = ch;
       let j = i + 1;
+      let lit = '';
       while (j < arg.length) {
-        if (arg[j] === '\\') { out += arg[j + 1] ?? ''; j += 2; continue; }
+        if (arg[j] === '\\') { lit += arg[j + 1] ?? ''; j += 2; continue; }
         if (arg[j] === quote) break;
         if (quote === '`' && arg[j] === '$' && arg[j + 1] === '{') {
           let depth = 1; let k = j + 2;
@@ -58,20 +61,38 @@ function argToPath(arg) {
             else if (arg[k] === '}') depth -= 1;
             k += 1;
           }
-          out += '§'; j = k; continue;
+          segs.push({ type: 'code' });
+          j = k;
+          continue;
         }
-        out += arg[j]; j += 1;
+        lit += arg[j];
+        j += 1;
       }
+      segs.push({ type: 'lit', v: lit });
       i = j + 1;
     } else {
-      // 引号外：只要出现标识符/调用，就说明这里拼了动态值
       let j = i; let sawCode = false;
       while (j < arg.length && arg[j] !== "'" && arg[j] !== '"' && arg[j] !== '`') {
         if (/[A-Za-z_$]/.test(arg[j])) sawCode = true;
         j += 1;
       }
-      if (sawCode) out += '§';
+      if (sawCode) segs.push({ type: 'code' });
       i = j;
+    }
+  }
+
+  let out = '';
+  for (let s = 0; s < segs.length; s += 1) {
+    const seg = segs[s];
+    if (seg.type === 'code') {
+      const next = segs[s + 1];
+      // 后面紧跟的是查询串 → 这段 code 是条件表达式，不是路径段
+      if (next && next.type === 'lit' && next.v.startsWith('?')) continue;
+      out += '§';
+    } else {
+      const q = seg.v.indexOf('?');
+      out += q >= 0 ? seg.v.slice(0, q) : seg.v;
+      if (q >= 0) break; // 查询串之后都不是路径
     }
   }
   return out.replace(/§+/g, ':id');
