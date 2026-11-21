@@ -154,5 +154,20 @@ check('统计 200', stats.status === 200);
 check('含物品状态分布', Array.isArray(stats.data?.items?.byStatus) && stats.data.items.byStatus.length > 0);
 check('含近 7 日新增', Array.isArray(stats.data?.daily) && stats.data.daily.length > 0);
 
+// 17. 重算全部匹配（需求基线 §7「管理员重新计算匹配」）
+const recompute = await call('POST', '/api/admin/recompute-matches');
+check('重算匹配 200', recompute.status === 200, recompute.data?.error?.message);
+check('返回扫描数与重算数', typeof recompute.data?.scanned === 'number' && typeof recompute.data?.recomputed === 'number',
+  `scanned=${recompute.data?.scanned} recomputed=${recompute.data?.recomputed}`);
+check('无失败项', Array.isArray(recompute.data?.failures) && recompute.data.failures.length === 0);
+const auditAfterRecompute = await call('GET', '/api/admin/audit-logs?limit=10');
+check('重算动作进审计日志',
+  (auditAfterRecompute.data?.logs || []).some((l) => l.action === 'matching.recompute'));
+
+// 18. 学生调用重算应被拒
+await loginAs('20230001');
+const studentRecompute = await call('POST', '/api/admin/recompute-matches');
+check('学生重算被拒 403', studentRecompute.status === 403, String(studentRecompute.status));
+
 console.log(`\n结果：通过 ${pass}，失败 ${fail}`);
 process.exit(fail === 0 ? 0 : 1);
