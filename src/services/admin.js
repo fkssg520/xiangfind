@@ -42,7 +42,7 @@ export function searchUsers(db, query, viewer) {
   const params = q ? [`%${q}%`, `%${q}%`, `%${q}%`] : [];
   const rows = db
     .prepare(
-      `SELECT u.id, u.student_id, u.name, u.email, u.role, u.status, u.created_at,
+      `SELECT u.id, u.student_id, u.name, u.email, u.role, u.status, u.created_at, u.email_verified_at,
               (SELECT COUNT(*) FROM items i WHERE i.user_id = u.id) AS item_count
          FROM users u ${where} ORDER BY u.created_at DESC LIMIT 50`
     )
@@ -64,6 +64,9 @@ export function searchUsers(db, query, viewer) {
         status: r.status,
         itemCount: r.item_count,
         isVolunteer: r.role === 'volunteer',
+        // 管理员需要知道谁还没验证邮箱（演示前要能快速看出"这个账号不能发布"）
+        emailVerified: Boolean(r.email_verified_at),
+        emailVerifiedAt: r.email_verified_at || null,
         storagePoints: assigns.filter((a) => a.user_id === r.id).map((a) => ({ id: a.id, name: a.name })),
         createdAt: r.created_at,
       })),
