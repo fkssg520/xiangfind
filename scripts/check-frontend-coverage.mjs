@@ -62,6 +62,10 @@ const REQUIRED = [
   ['后台重置密码（§4.10）', () => hasPath('/reset-password')],
   ['后台存放点维护（§4.10）', () => hasPath('/admin/storage-points')],
   ['后台群发消息（§4.10）', () => hasPath('/admin/messages')],
+  ['后台用户搜索（§4.10）', () => hasCode(/\/admin\/users\?(?:[^'"`]*\bq=|q=)/)],
+  ['后台存放点排序（§4.10）', () => hasCode(/sortOrder|sort_order/)],
+  ['后台恢复演示数据（§4.10）', () => hasPath('/admin/reset-demo')],
+  ['后台导出统计（§4.10）', () => hasPath('/admin/stats')],
   ['联系方式渲染（§4.11）', () => hasCode(/contact/)],
 ];
 
