@@ -110,7 +110,8 @@ SMTP_HOST=
 SMTP_PORT=465
 SMTP_USER=
 SMTP_PASSWORD=
-MAIL_FROM=湘寻 <noreply@$DOMAIN>
+# 发件人必须与 SMTP_USER 同一个邮箱，否则 QQ/163 会拒发；留空则自动用 SMTP_USER
+MAIL_FROM=
 PUBLIC_BASE_URL=$( [ "$USE_SSL" -eq 1 ] && echo "https://$DOMAIN" || echo "http://$DOMAIN" )
 ENVEOF
   chown "$SVC_USER:$SVC_USER" "$APPDIR/.env"
