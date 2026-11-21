@@ -74,13 +74,19 @@ ok('列表不含联系方式', (list.data?.items || []).every((i) => !('contact'
 const pts = await anon.get('/api/storage-points');
 ok('游客能拿到存放点', pts.status === 200 && (pts.data?.storagePoints || []).length > 0, `${pts.data?.storagePoints?.length} 个`);
 
+// 先查志愿者绑定的存放点：发布时要落到他的点，否则他确认不了
+const volPre = await login('20230002');
+const volMe = await volPre.client.get('/api/me');
+const volPointId = (volMe.data?.user?.storagePoints || [])[0]?.id || null;
+ok('志愿者绑定了存放点', Boolean(volPointId), volPointId || '未绑定（演示会走管理员兜底）');
+
 const stu = await login('20230001');
 ok('学生登录', stu.status === 200);
 const stamp = String(Date.now()).slice(-6);
 const pub = await stu.client.post('/api/items', {
   type: 'found', title: `彩排保温杯 ${stamp}`, category: '其他',
   description: '演示彩排创建：灰色保温杯，杯底有划痕，落在八教 201。',
-  location: '第八教学楼 201', valueLevel: 'normal', storagePointId: pts.data.storagePoints[0].id,
+  location: '第八教学楼 201', valueLevel: 'normal', storagePointId: (volPointId || pts.data.storagePoints[0].id),
 });
 const itemId = pub.data?.item?.id;
 ok('发布招领', pub.status === 201, pub.data?.item?.status);
@@ -88,10 +94,11 @@ ok('招领初始为待存放', pub.data?.item?.status === 'pending_storage');
 
 // 主线二：确认入库 → 匹配
 console.log('\n主线二：确认入库 → 智能匹配');
-const adm = await login('90000001');
-ok('管理员登录', adm.status === 200);
-const store = await adm.client.patch(`/api/items/${itemId}`, { status: 'stored' });
-ok('管理员确认入库（演示脚本用这条路）', store.status === 200, store.data?.item?.status);
+// 需求基线 §3：确认入库由「所属存放点志愿者」执行（G-5 后前端已有入口，演示走志愿者）
+const vol0 = await login('20230002');
+ok('志愿者登录', vol0.status === 200);
+const store = await vol0.client.patch(`/api/items/${itemId}`, { status: 'stored' });
+ok('志愿者确认入库（演示脚本走这条路）', store.status === 200, store.data?.item?.status);
 
 const lost = await stu.client.post('/api/items', {
   type: 'lost', title: `丢了保温杯 ${stamp}`, category: '其他',
