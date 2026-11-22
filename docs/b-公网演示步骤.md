@@ -146,3 +146,27 @@ powercfg /change hibernate-timeout-ac 0
 curl -s -o NUL -w "%{http_code}" https://你的地址/health
 # 期望 200；530 就是隧道死了，按上面重拉
 ```
+---
+
+## ⚠️ 更关键的一条：进程不能靠 `Start-Process` 起（会被回收）
+
+2026-11-22 实测：用 `Start-Process ... -WindowStyle Hidden` 起的 `node` / `cloudflared`，
+**在那条 PowerShell 命令结束时会被回收**——日志里有 `Registered tunnel connection`，
+但几秒后公网就是 530，因为进程已经没了。
+
+**正确做法：把服务和隧道都作为「长驻后台任务」启动**（本会话用 `run_in_background` 的方式），
+而不是一次性命令里的 `Start-Process`。
+
+判断进程是否真活着：
+
+```powershell
+curl -s -o NUL -w "%{http_code}" http://127.0.0.1:3000/health   # 200 才算活
+```
+
+> 这个坑的表现和"隧道被封"一模一样（都是 530/000），所以**先确认进程还在**，再怀疑网络。
+
+## 2026-11-22 的实测结果（本机可当演示主机）
+
+之前测过本机隧道返回 `000`，11/22 晚复测**通了**（三次全 200）。所以出网策略会变，**换网络环境要重测**。
+
+实测：公网地址上跑完整彩排（发布 → 入库 → 匹配 → 认领双签 → 归还）**20/20 通过**。
