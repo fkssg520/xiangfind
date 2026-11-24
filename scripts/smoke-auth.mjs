@@ -52,14 +52,18 @@ console.log(`\n=== 认证冒烟 @ ${BASE} ===`);
 const home = await call('GET', '/');
 check('GET / 返回 200 且下发 CSRF Cookie', home.status === 200 && Boolean(jar.xf_csrf), `csrf=${jar.xf_csrf?.slice(0, 8)}…`);
 
-// 1. 注册
+// 1. 注册：只创建"待注册"记录，不建账号
 const reg = await call('POST', '/api/auth/register', account);
-check('注册成功 201', reg.status === 201, JSON.stringify(reg.data?.user?.studentId || reg.data));
-check('注册后 emailVerified=false', reg.data?.user?.emailVerified === false);
+check('注册返回 201 且 pending=true', reg.status === 201 && reg.data?.pending === true, JSON.stringify(reg.data));
+check('注册响应里不含 user（账号还没建）', reg.data?.user === undefined);
 
-// 2. 重复注册应 409
+// 2. 此时登录应失败（账号还不存在）
+const earlyLogin = await call('POST', '/api/auth/login', { studentId: account.studentId, password: account.password });
+check('未验证前无法登录', earlyLogin.status === 401, earlyLogin.data?.error?.code);
+
+// 3. 重复提交注册：覆盖待注册记录，仍不建账号
 const dup = await call('POST', '/api/auth/register', account);
-check('重复学号/邮箱返回 409', dup.status === 409, dup.data?.error?.code);
+check('重复注册仍是 201 pending（覆盖待注册）', dup.status === 201 && dup.data?.pending === true, String(dup.status));
 
 // 3. 从服务端日志里取验证码
 const log = readFileSync(LOG, 'utf8');
@@ -76,6 +80,10 @@ const ok = await call('POST', '/api/auth/verify-email', { email: account.email, 
 check('正确验证码通过 200', ok.status === 200);
 check('验证后 emailVerified=true', ok.data?.user?.emailVerified === true);
 check('验证后拿到会话 Cookie', Boolean(jar.xf_sid));
+
+// 账号已存在，再次注册应 409
+const dup2 = await call('POST', '/api/auth/register', account);
+check('账号已存在时注册返回 409', dup2.status === 409, dup2.data?.error?.code);
 
 // 6. /api/me
 const me = await call('GET', '/api/me');

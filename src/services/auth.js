@@ -11,10 +11,14 @@ const RESEND_COOLDOWN_MS = 60 * 1000; // 同邮箱 60 秒冷却
 const DAILY_MAX = 10;                 // 每邮箱每天最多 10 次
 const MAX_ATTEMPTS = 5;               // 单个验证码最多试 5 次
 
-const PEPPER = process.env.SESSION_SECRET || 'dev-pepper-change-me';
+// 注意：不能用模块级常量——server.js 的 loadDotEnv() 在本模块之后执行，
+// 常量会在 .env 生效前就固定成默认值（实测验证码 hash 用的是默认 pepper）。
+function pepper() {
+  return process.env.SESSION_SECRET || 'dev-pepper-change-me';
+}
 
 function codeHash(email, code) {
-  return createHash('sha256').update(`${email}|${code}|${PEPPER}`).digest('hex');
+  return createHash('sha256').update(`${email}|${code}|${pepper()}`).digest('hex');
 }
 
 function sixDigits() {
@@ -48,6 +52,7 @@ export async function register(db, body, ip) {
   const limited = hit(`register:${ip}`, REGISTER_LIMIT, 60 * 60 * 1000);
   if (!limited.ok) return { status: 429, body: { error: { code: 'rate_limited', message: '注册过于频繁，请稍后再试' } } };
 
+  // 已经是正式账号就不能再注册
   const exists = db
     .prepare('SELECT student_id, email FROM users WHERE student_id = ? OR email = ?')
     .all(data.studentId, data.email);
@@ -56,23 +61,33 @@ export async function register(db, body, ip) {
     return { status: 409, body: { error: { code: dup, message: dup === 'studentId' ? '该学号已注册' : '该邮箱已注册' } } };
   }
 
-  const userId = ID.user();
+  // 同一学号/邮箱重复提交：覆盖上一条待注册记录（允许用户重来）
+  db.prepare('DELETE FROM pending_registrations WHERE student_id = ? OR email = ?')
+    .run(data.studentId, data.email);
+
+  const code = sixDigits();
   const now = nowIso();
   db.prepare(
-    `INSERT INTO users (id, student_id, name, email, email_verified_at, password_hash, phone, contact, role, status, created_at)
-     VALUES (?, ?, ?, ?, NULL, ?, '', '', 'student', 'active', ?)`
-  ).run(userId, data.studentId, data.name, data.email, hashPassword(data.password), now);
+    `INSERT INTO pending_registrations
+       (id, student_id, name, email, password_hash, code_hash, expires_at, attempts, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`
+  ).run(
+    ID.token(), data.studentId, data.name, data.email,
+    hashPassword(data.password), codeHash(data.email, code),
+    new Date(Date.now() + CODE_TTL_MS).toISOString(), now,
+  );
 
-  const mail = await issueCode(db, userId, data.email, 'verify');
+  const mail = await sendVerificationCode(data.email, code, 'verify');
   return {
     status: 201,
     body: {
-      user: { id: userId, studentId: data.studentId, name: data.name, email: data.email, role: 'student', emailVerified: false },
-      // codeSent 表示"用户真的能收到"：只有 delivered 才为 true。
-      // 之前恒为 true，发信失败时前端仍显示"验证码已发送"，用户会白等（QQ 535 就是这么暴露的）。
+      // 账号还没有创建：验证码通过后才建
+      pending: true,
+      email: data.email,
+      studentId: data.studentId,
+      expiresInMinutes: Math.round(CODE_TTL_MS / 60000),
       codeSent: Boolean(mail.delivered),
       delivery: mail.delivered ? 'email' : mail.reason,
-      // 兜底：发信失败时验证码打到服务端日志，便于现场救急
       fallback: mail.delivered ? null : 'log',
     },
   };
@@ -113,18 +128,34 @@ export async function resendCode(db, body, ip) {
   if (!limited.ok) return { status: 429, body: { error: { code: 'rate_limited', message: '请求过于频繁' } } };
 
   const user = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
-  if (!user) {
-    // 防枚举：不透露邮箱是否存在
-    return { status: 200, body: { ok: true, delivery: 'email' } };
+  if (user) {
+    const result = await issueCode(db, user.id, email, 'verify');
+    if (result.reason === 'cooldown') {
+      return { status: 429, body: { error: { code: 'cooldown', message: `请 ${result.cooldownSeconds} 秒后再试`, retryAfter: result.cooldownSeconds } } };
+    }
+    if (result.reason === 'daily_limit') {
+      return { status: 429, body: { error: { code: 'daily_limit', message: '今天发送次数已达上限' } } };
+    }
+    return { status: 200, body: { ok: true, codeSent: Boolean(result.delivered), delivery: result.delivered ? 'email' : result.reason, fallback: result.delivered ? null : 'log' } };
   }
-  const result = await issueCode(db, user.id, email, 'verify');
-  if (result.reason === 'cooldown') {
-    return { status: 429, body: { error: { code: 'cooldown', message: `请 ${result.cooldownSeconds} 秒后再试`, retryAfter: result.cooldownSeconds } } };
+
+  // 待注册：账号还没建，验证码存在 pending_registrations
+  const pending = db.prepare('SELECT * FROM pending_registrations WHERE email = ?').get(email);
+  if (pending) {
+    const wait = RESEND_COOLDOWN_MS - (Date.now() - new Date(pending.created_at).getTime());
+    if (wait > 0) {
+      const seconds = Math.ceil(wait / 1000);
+      return { status: 429, body: { error: { code: 'cooldown', message: `请 ${seconds} 秒后再试`, retryAfter: seconds } } };
+    }
+    const code = sixDigits();
+    db.prepare('UPDATE pending_registrations SET code_hash = ?, expires_at = ?, attempts = 0, created_at = ? WHERE id = ?')
+      .run(codeHash(email, code), new Date(Date.now() + CODE_TTL_MS).toISOString(), nowIso(), pending.id);
+    const mail = await sendVerificationCode(email, code, 'verify');
+    return { status: 200, body: { ok: true, codeSent: Boolean(mail.delivered), delivery: mail.delivered ? 'email' : mail.reason, fallback: mail.delivered ? null : 'log' } };
   }
-  if (result.reason === 'daily_limit') {
-    return { status: 429, body: { error: { code: 'daily_limit', message: '今天发送次数已达上限' } } };
-  }
-  return { status: 200, body: { ok: true, codeSent: Boolean(result.delivered), delivery: result.delivered ? 'email' : result.reason, fallback: result.delivered ? null : 'log' } };
+
+  // 防枚举：不透露邮箱是否存在
+  return { status: 200, body: { ok: true, delivery: 'email' } };
 }
 
 export function verifyEmail(db, body) {
@@ -133,6 +164,54 @@ export function verifyEmail(db, body) {
 
   if (!/^\d{6}$/.test(code)) return { status: 400, body: { error: { code: 'code', message: '验证码为 6 位数字' } } };
 
+  // ① 优先按「待注册」处理：验证通过才建账号
+  const pending = db
+    .prepare('SELECT * FROM pending_registrations WHERE email = ?')
+    .get(email);
+
+  if (pending) {
+    if (new Date(pending.expires_at).getTime() <= Date.now()) {
+      return { status: 400, body: { error: { code: 'expired', message: '验证码已过期，请重新发送' } } };
+    }
+    if (pending.attempts >= MAX_ATTEMPTS) {
+      return { status: 429, body: { error: { code: 'attempts', message: '错误次数过多，请重新获取验证码' } } };
+    }
+    if (pending.code_hash !== codeHash(email, code)) {
+      db.prepare('UPDATE pending_registrations SET attempts = attempts + 1 WHERE id = ?').run(pending.id);
+      const left = MAX_ATTEMPTS - (pending.attempts + 1);
+      return { status: 400, body: { error: { code: 'code', message: left > 0 ? `验证码不正确，还可尝试 ${left} 次` : '错误次数过多，请重新获取验证码' } } };
+    }
+
+    // 并发保护：这段时间里可能已经有人用同样学号/邮箱注册成功
+    const conflict = db
+      .prepare('SELECT student_id, email FROM users WHERE student_id = ? OR email = ?')
+      .all(pending.student_id, pending.email);
+    if (conflict.length) {
+      db.prepare('DELETE FROM pending_registrations WHERE id = ?').run(pending.id);
+      const dup = conflict[0].student_id === pending.student_id ? 'studentId' : 'email';
+      return { status: 409, body: { error: { code: dup, message: dup === 'studentId' ? '该学号刚刚被注册，请重新填写' : '该邮箱刚刚被注册，请重新填写' } } };
+    }
+
+    const now = nowIso();
+    const userId = ID.user();
+    db.prepare(
+      `INSERT INTO users (id, student_id, name, email, email_verified_at, password_hash, phone, contact, role, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, '', '', 'student', 'active', ?)`
+    ).run(userId, pending.student_id, pending.name, pending.email, now, pending.password_hash, now);
+    db.prepare('DELETE FROM pending_registrations WHERE id = ?').run(pending.id);
+
+    return {
+      status: 200,
+      body: {
+        user: {
+          id: userId, studentId: pending.student_id, name: pending.name,
+          email: pending.email, role: 'student', emailVerified: true,
+        },
+      },
+    };
+  }
+
+  // ② 兜底：历史上已创建但未验证的账号，仍走 email_tokens
   const token = db
     .prepare(
       `SELECT * FROM email_tokens
