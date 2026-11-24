@@ -221,12 +221,14 @@
 
           <form class="auth-form" id="form-verify" hidden>
             <p class="auth-note">验证码已发送到 <b id="verify-email"></b>，15 分钟内有效。</p>
+            <p class="auth-hint">账号已创建，<b>完成邮箱验证后才能发布信息或申请认领</b>。没收到可以重新发送，或返回修改。</p>
             <label class="field"><span>6 位验证码</span>
               <input class="input" name="code" inputmode="numeric" maxlength="6" placeholder="000000" required>
             </label>
             <p class="auth-msg" id="verify-msg" hidden></p>
             <button class="btn auth-submit" type="submit">验证并登录</button>
-            <button class="auth-link" type="button" id="verify-back">换一个邮箱</button>
+            <button class="auth-link" type="button" id="verify-resend">重新发送验证码</button>
+            <button class="auth-link" type="button" id="verify-back">返回修改注册信息</button>
           </form>
         </div>
       </div>

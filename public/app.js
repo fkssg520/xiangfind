@@ -796,7 +796,16 @@ function bindAuth() {
     };
     const r = await api('/auth/register', { method: 'POST', body });
     busy(btn, false);
-    if (!r.ok) return setMsg('reg-msg', errText(r, '注册失败'));
+    if (!r.ok) {
+      // 学号/邮箱已被占用：区分"从没注册过"和"注册过但没验证"两种情况，给出可操作路径
+      const code = r.data?.error?.code;
+      if (r.status === 409 && (code === 'studentId' || code === 'email')) {
+        const which = code === 'studentId' ? '这个学号' : '这个邮箱';
+        return setMsg('reg-msg', `${which}已经注册过。如果你上次注册后没有完成邮箱验证，`
+          + '请回到验证页点「重新发送验证码」；忘记当时用哪个邮箱，请联系管理员。');
+      }
+      return setMsg('reg-msg', errText(r, '注册失败'));
+    }
     pendingEmail = body.email;
     sessionStorage.setItem(PENDING_KEY, pendingEmail);
     document.getElementById('verify-email').textContent = pendingEmail;
@@ -820,9 +829,39 @@ function bindAuth() {
     toast('注册成功，已登录');
   });
 
-  document.getElementById('verify-back')?.addEventListener('click', () => {
+  document.getElementById('verify-back')?.addEventListener('click', async () => {
     setMsg('verify-msg', '');
-    showAuthForm('register');
+    const yes = await confirmDialog(
+      '返回修改注册信息？',
+      '账号已经创建，同一个学号不能重复注册。若只是想换邮箱，请先用当前邮箱完成验证，或联系管理员。',
+      '返回修改',
+    );
+    if (yes) showAuthForm('register');
+  });
+
+  /* 重新发送验证码（原来只有"换邮箱"，码过期就没路了） */
+  document.getElementById('verify-resend')?.addEventListener('click', async (e) => {
+    const email = pendingEmail || sessionStorage.getItem(PENDING_KEY);
+    if (!email) {
+      setMsg('verify-msg', '找不到要验证的邮箱，请返回重新注册');
+      return;
+    }
+    const btn = e.currentTarget;
+    setMsg('verify-msg', '');
+    busy(btn, true, '发送中…');
+    const r = await api('/auth/resend-code', { method: 'POST', body: { email } });
+    busy(btn, false, '重新发送验证码');
+    if (!r.ok) {
+      const retry = r.data?.error?.retryAfter || r.data?.retryAfter;
+      if (r.status === 429) {
+        setMsg('verify-msg', retry ? `发送太频繁，请 ${retry} 秒后再试` : '发送太频繁，稍后再试');
+      } else {
+        setMsg('verify-msg', errText(r, '发送失败'));
+      }
+      return;
+    }
+    setMsg('verify-msg', '');
+    toast('验证码已重新发送，请查收邮箱');
   });
 
   /* restore verify step after refresh */
