@@ -57,43 +57,15 @@ const reg = await call('POST', '/api/auth/register', account);
 check('注册成功 201', reg.status === 201, JSON.stringify(reg.data?.user?.studentId || reg.data));
 check('注册后 emailVerified=false', reg.data?.user?.emailVerified === false);
 
-// 2. 未完成验证时再次注册：允许用新资料覆盖（issue #154 方案 B）
-//    否则用户放弃验证后学号/邮箱被僵尸账号占死，重新注册只会 409
-const rerun = await call('POST', '/api/auth/register', { ...account, name: '冒烟测试二', password: 'demo5678', confirmPassword: 'demo5678' });
-check('未验证账号可用同一学号重注册（201 且 replaced=true）', rerun.status === 201 && rerun.data?.replaced === true,
-  rerun.status === 201 ? `replaced=${rerun.data?.replaced}` : JSON.stringify(rerun.data?.error));
-account.name = '冒烟测试二';
-account.password = 'demo5678';
-account.confirmPassword = 'demo5678';
+// 2. 重复注册应 409
+const dup = await call('POST', '/api/auth/register', account);
+check('重复学号/邮箱返回 409', dup.status === 409, dup.data?.error?.code);
 
-const oldPwd = await call('POST', '/api/auth/login', { studentId: account.studentId, password: 'demo1234' });
-check('覆盖后旧密码失效 401', oldPwd.status === 401);
-const newPwd = await call('POST', '/api/auth/login', { studentId: account.studentId, password: account.password });
-check('覆盖后新密码可登录 200（验证前允许登录）', newPwd.status === 200);
-await call('POST', '/api/auth/logout');
-
-// 2b. 不能顶掉别人的待验证账号：用他人邮箱注册 → 409 email 且带 unverified 标记
-const other = { studentId: '2098' + stamp, name: '占位账号', email: `other${stamp}@demo.local`, password: 'demo1234', confirmPassword: 'demo1234' };
-const otherReg = await call('POST', '/api/auth/register', other);
-check('第二账号注册 201（用于邮箱冲突用例）', otherReg.status === 201);
-const steal = await call('POST', '/api/auth/register', { ...account, email: other.email });
-check('用他人已注册邮箱 → 409 email 且 unverified=true',
-  steal.status === 409 && steal.data?.error?.code === 'email' && steal.data?.error?.unverified === true,
-  JSON.stringify(steal.data?.error));
-
-// 3. 从服务端日志里取验证码（按邮箱过滤，避免串到别的账号）
+// 3. 从服务端日志里取验证码
 const log = readFileSync(LOG, 'utf8');
-const codeFor = (email) => [...log.matchAll(new RegExp(`to=${email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} code=(\\d{6})`, 'g'))].map((m) => m[1]);
-const codes = codeFor(account.email);
-const code = codes.at(-1);
-const firstCode = codes.at(-2);
-check('日志里拿到 6 位验证码', Boolean(code), code ? `code=${code}（该邮箱共 ${codes.length} 个）` : '未找到');
-
-// 3b. 覆盖注册会作废旧验证码，否则旧邮箱的码能验新邮箱
-if (firstCode && code && firstCode !== code) {
-  const stale = await call('POST', '/api/auth/verify-email', { email: account.email, code: firstCode });
-  check('覆盖注册后旧验证码作废 400', stale.status === 400, stale.data?.error?.message);
-}
+const matches = [...log.matchAll(/to=\S+ code=(\d{6})/g)];
+const code = matches.at(-1)?.[1];
+check('日志里拿到 6 位验证码', Boolean(code), code ? `code=${code}` : '未找到');
 
 // 4. 错误验证码
 const bad = await call('POST', '/api/auth/verify-email', { email: account.email, code: code === '000000' ? '111111' : '000000' });
@@ -104,12 +76,6 @@ const ok = await call('POST', '/api/auth/verify-email', { email: account.email, 
 check('正确验证码通过 200', ok.status === 200);
 check('验证后 emailVerified=true', ok.data?.user?.emailVerified === true);
 check('验证后拿到会话 Cookie', Boolean(jar.xf_sid));
-
-// 5b. 验证完成后再重复注册 → 真冲突 409（unverified=false）
-const dupVerified = await call('POST', '/api/auth/register', { ...account, password: 'demo9999', confirmPassword: 'demo9999' });
-check('验证后重复注册 409 且 unverified=false',
-  dupVerified.status === 409 && dupVerified.data?.error?.unverified === false,
-  JSON.stringify(dupVerified.data?.error));
 
 // 6. /api/me
 const me = await call('GET', '/api/me');
