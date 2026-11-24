@@ -49,22 +49,7 @@
 ```json
 { "studentId": "20230001", "name": "张三", "email": "a@b.c", "password": "demo1234", "confirmPassword": "demo1234" }
 ```
-→ `201 { "user": {...}, "codeSent": true, "delivery": "email" | "smtp_not_configured", "fallback": null, "replaced": false }`
-
-**账号在验证前就已创建**（`email_verified_at` 为空），因此「注册」可分两种情况：
-
-| 情况 | 结果 |
-|---|---|
-| 学号/邮箱都未被占用 | 新建账号，`201`，`replaced: false` |
-| **学号被一个「未验证」的账号占着** | 用本次提交的姓名/邮箱/密码**覆盖**该账号，作废旧验证码并重发新码；`201`，`replaced: true` |
-| 学号或邮箱被**已验证**的账号占着 | `409`，`error.unverified: false` |
-| 邮箱被**另一个**账号占着（哪怕是未验证的） | `409 { "code": "email", "unverified": true }`——不能顶掉别人的待验证账号 |
-
-覆盖注册的理由：用户在验证页放弃后，学号/邮箱会被僵尸账号占死，重新注册只会 409、看起来像卡死
-（issue #154）。覆盖时旧验证码立即作废，避免「旧邮箱的码验证新邮箱」。
-`replaced: true` 时前端应提示「已更新你上次未完成的注册」。
-
-是否真的能收到验证码仍看 `codeSent`。
+→ `201 { "user": {...}, "codeSent": true, "delivery": "email" | "smtp_not_configured", "fallback": null }`
 
 **`codeSent` 只在邮件真正发出时为 `true`**（即 `delivery === "email"`）。
 
