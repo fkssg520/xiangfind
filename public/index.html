@@ -220,14 +220,13 @@
           </form>
 
           <form class="auth-form" id="form-verify" hidden>
-            <p class="auth-note">验证码已发送到 <b id="verify-email"></b>，10 分钟内有效。</p>
+            <p class="auth-note">验证码已发送到 <b id="verify-email"></b>，15 分钟内有效。</p>
             <label class="field"><span>6 位验证码</span>
               <input class="input" name="code" inputmode="numeric" maxlength="6" placeholder="000000" required>
             </label>
             <p class="auth-msg" id="verify-msg" hidden></p>
             <button class="btn auth-submit" type="submit">验证并登录</button>
             <button class="auth-link" type="button" id="verify-back">换一个邮箱</button>
-            <p class="auth-hint">开发环境未配 SMTP，验证码请查看服务端日志（<code>[mail:dev]</code>）。</p>
           </form>
         </div>
       </div>
