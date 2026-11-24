@@ -48,20 +48,57 @@ export async function register(db, body, ip) {
   const limited = hit(`register:${ip}`, REGISTER_LIMIT, 60 * 60 * 1000);
   if (!limited.ok) return { status: 429, body: { error: { code: 'rate_limited', message: '注册过于频繁，请稍后再试' } } };
 
-  const exists = db
-    .prepare('SELECT student_id, email FROM users WHERE student_id = ? OR email = ?')
+  const conflicts = db
+    .prepare('SELECT id, student_id, email, email_verified_at FROM users WHERE student_id = ? OR email = ?')
     .all(data.studentId, data.email);
-  if (exists.length) {
-    const dup = exists[0].student_id === data.studentId ? 'studentId' : 'email';
-    return { status: 409, body: { error: { code: dup, message: dup === 'studentId' ? '该学号已注册' : '该邮箱已注册' } } };
+  const byStudent = conflicts.find((u) => u.student_id === data.studentId) || null;
+  const byEmail = conflicts.find((u) => u.email === data.email) || null;
+  const isUnverified = (u) => Boolean(u) && !u.email_verified_at;
+
+  // 邮箱被「另一个」账号占着 → 409（不能把别人的待验证账号顶掉）
+  if (byEmail && (!byStudent || byEmail.id !== byStudent.id)) {
+    return { status: 409, body: { error: { code: 'email', message: '该邮箱已注册', unverified: isUnverified(byEmail) } } };
+  }
+  // 学号已被验证过的账号占用 → 409（真重复注册）
+  if (byStudent && !isUnverified(byStudent)) {
+    return { status: 409, body: { error: { code: 'studentId', message: '该学号已注册', unverified: false } } };
+  }
+
+  const now = nowIso();
+  // 学号指向一个「未验证」的旧账号：允许用本次提交的资料覆盖
+  // 否则用户放弃验证后学号/邮箱被永久占住，重新注册只会 409（issue #154，方案 B）
+  if (byStudent) {
+    db.exec('BEGIN');
+    try {
+      db.prepare('UPDATE users SET name = ?, email = ?, password_hash = ? WHERE id = ?')
+        .run(data.name, data.email, hashPassword(data.password), byStudent.id);
+      // 旧邮箱的验证码立即作废，避免"旧码验新邮箱"
+      db.prepare("UPDATE email_tokens SET used_at = ? WHERE user_id = ? AND purpose = 'verify' AND used_at IS NULL")
+        .run(now, byStudent.id);
+      db.exec('COMMIT');
+    } catch {
+      db.exec('ROLLBACK');
+      return { status: 500, body: { error: { code: 'failed', message: '注册失败，请稍后再试' } } };
+    }
+    // 重发验证码：这是用户主动重来，跳过 60 秒冷却（注册本身仍受 5 次/小时限流）
+    const mail = await issueCode(db, byStudent.id, data.email, 'verify', { ignoreCooldown: true });
+    return {
+      status: 201,
+      body: {
+        user: { id: byStudent.id, studentId: data.studentId, name: data.name, email: data.email, role: 'student', emailVerified: false },
+        codeSent: Boolean(mail.delivered),
+        delivery: mail.delivered ? 'email' : mail.reason,
+        fallback: mail.delivered ? null : 'log',
+        replaced: true,   // 前端可据此提示"已更新你上次未完成的注册"
+      },
+    };
   }
 
   const userId = ID.user();
-  const now = nowIso();
   db.prepare(
     `INSERT INTO users (id, student_id, name, email, email_verified_at, password_hash, phone, contact, role, status, created_at)
      VALUES (?, ?, ?, ?, NULL, ?, '', '', 'student', 'active', ?)`
-  ).run(userId, data.studentId, data.name, data.email, hashPassword(data.password), now);
+  ).run(userId, data.studentId, data.name, data.email, hashPassword(data.password), nowIso());
 
   const mail = await issueCode(db, userId, data.email, 'verify');
   return {
@@ -78,14 +115,16 @@ export async function register(db, body, ip) {
   };
 }
 
-async function issueCode(db, userId, email, purpose) {
+async function issueCode(db, userId, email, purpose, opts = {}) {
   // 冷却按「邮箱 + 用途」计：刚注册完不该挡住找回密码
-  const last = db
-    .prepare("SELECT created_at FROM email_tokens WHERE email = ? AND purpose = ? ORDER BY created_at DESC LIMIT 1")
-    .get(email, purpose);
-  if (last) {
-    const wait = RESEND_COOLDOWN_MS - (Date.now() - new Date(last.created_at).getTime());
-    if (wait > 0) return { delivered: false, reason: 'cooldown', cooldownSeconds: Math.ceil(wait / 1000) };
+  if (!opts.ignoreCooldown) {
+    const last = db
+      .prepare("SELECT created_at FROM email_tokens WHERE email = ? AND purpose = ? ORDER BY created_at DESC LIMIT 1")
+      .get(email, purpose);
+    if (last) {
+      const wait = RESEND_COOLDOWN_MS - (Date.now() - new Date(last.created_at).getTime());
+      if (wait > 0) return { delivered: false, reason: 'cooldown', cooldownSeconds: Math.ceil(wait / 1000) };
+    }
   }
 
   // 每日上限仍按邮箱总量算（防止被当短信炮）
