@@ -33,9 +33,10 @@ export function seedDemo(db) {
     (id,student_id,name,email,email_verified_at,password_hash,phone,contact,role,status,created_at)
     VALUES (?,?,?,?,?,?,'','',?,'active',?)`);
   const users = [
-    ['usr_demo_admin', '90000001', '演示管理员', 'admin@demo.local', 'admin'],
-    ['usr_demo_student', '20230001', '演示同学', 'student@demo.local', 'student'],
-    ['usr_demo_vol', '20230002', '演示志愿者', 'volunteer@demo.local', 'volunteer'],
+    // 姓名用化名（张三/李四/王五），与演示机实际数据一致，见 issue #148
+    ['usr_demo_admin', '90000001', '王五', 'admin@demo.local', 'admin'],
+    ['usr_demo_student', '20230001', '张三', 'student@demo.local', 'student'],
+    ['usr_demo_vol', '20230002', '李四', 'volunteer@demo.local', 'volunteer'],
   ];
   users.forEach((u) => insUser.run(u[0], u[1], u[2], u[3], T0, pwd, u[4], T0));
 
@@ -73,7 +74,7 @@ export function seedDemo(db) {
 
   db.prepare(`INSERT OR IGNORE INTO messages
     (id,user_id,type,title,body,related_type,related_id,important,read_at,created_at)
-    VALUES (?,?,'claim','有人申请认领你的物品','演示同学申请认领「白色蓝牙耳机」，请到详情页处理。','item',?,1,NULL,?)`)
+    VALUES (?,?,'claim','有人申请认领你的物品','王五申请认领「白色蓝牙耳机」，请到详情页处理。','item',?,1,NULL,?)`)
     .run('msg_demo_1', 'usr_demo_student', 'itm_demo_1', T0);
 
   return {

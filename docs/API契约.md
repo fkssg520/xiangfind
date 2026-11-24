@@ -35,7 +35,7 @@
 ### 后台用户对象（`GET /api/admin/users`）
 
 ```json
-{ "id": "usr_x", "studentId": "20230001", "name": "演示同学", "email": "a@b.c",
+{ "id": "usr_x", "studentId": "20230001", "name": "张三", "email": "a@b.c",
   "role": "student", "status": "active", "itemCount": 3,
   "isVolunteer": false, "storagePoints": [{ "id": "stp_x", "name": "图书馆一楼服务台" }],
   "emailVerified": true, "emailVerifiedAt": "2026-11-10T08:00:00.000Z",

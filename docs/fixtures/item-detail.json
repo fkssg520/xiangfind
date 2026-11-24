@@ -12,7 +12,7 @@
     { "url": "/uploads/demo/earphone.webp", "sortOrder": 0 },
     { "url": "/uploads/demo/earphone-2.webp", "sortOrder": 1 }
   ],
-  "author": { "id": "usr_demo_student", "name": "演示同学", "isVolunteer": false },
+  "author": { "id": "usr_demo_student", "name": "张三", "isVolunteer": false },
   "storagePoint": {
     "id": "stp_demo_lib",
     "name": "图书馆一楼服务台",
@@ -37,7 +37,7 @@
     "status": "pending",
     "canReview": true,
     "publisherVerdict": null,
-    "applicantName": "演示管理员",
+    "applicantName": "王五",
     "note": "耳机是我的，盒盖右下角有一道划痕，我上周三丢在图书馆三楼。"
   },
   "contact": null

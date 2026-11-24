@@ -2,7 +2,7 @@
   "user": {
     "id": "usr_demo_student",
     "studentId": "20230001",
-    "name": "演示同学",
+    "name": "张三",
     "email": "student@demo.local",
     "role": "student",
     "isVolunteer": false,
