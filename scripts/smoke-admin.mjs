@@ -141,6 +141,16 @@ const regTmp = await call('POST', '/api/auth/register',
   { studentId: tmpSid, name: '改密测试', email: tmpEmail, password: tmpPwOld });
 check('改密用的一次性账号已注册', regTmp.status === 201, String(regTmp.status));
 
+// 注册不再等于"账号已存在"（验证码通过才算注册成功，见 issue #154 方案 A）：
+// 必须补一步邮箱验证，后台用户列表才搜得到这个账号。
+// 验证成功会下发该用户的会话，所以先存下管理员会话，验完再恢复。
+const adminJar = { ...jar };
+const tmpLog = readFileSync(LOG, 'utf8');
+const tmpCode = [...tmpLog.matchAll(new RegExp(`to=${tmpEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} code=(\\d{6})`, 'g'))].at(-1)?.[1];
+const tmpVerified = await call('POST', '/api/auth/verify-email', { email: tmpEmail, code: tmpCode });
+check('一次性账号完成邮箱验证', tmpVerified.status === 200, tmpVerified.data?.error?.message || '');
+jar = adminJar;
+
 const tmpUser = (await call('GET', `/api/admin/users?q=${tmpSid}`)).data.users.find((u) => u.studentId === tmpSid);
 check('后台能搜到该账号', Boolean(tmpUser));
 
