@@ -11,7 +11,7 @@
       "valueLevel": "normal",
       "status": "stored",
       "images": [{ "url": "/uploads/demo/earphone.webp", "sortOrder": 0 }],
-      "author": { "id": "usr_demo_student", "name": "演示同学", "isVolunteer": false },
+      "author": { "id": "usr_demo_student", "name": "张三", "isVolunteer": false },
       "storagePoint": { "id": "stp_demo_lib", "name": "图书馆一楼服务台", "type": "normal" },
       "createdAt": "2026-11-16T03:10:00.000Z",
       "isFavorited": false
@@ -27,7 +27,7 @@
       "valueLevel": "normal",
       "status": "open",
       "images": [],
-      "author": { "id": "usr_demo_student", "name": "演示同学", "isVolunteer": false },
+      "author": { "id": "usr_demo_student", "name": "张三", "isVolunteer": false },
       "storagePoint": null,
       "createdAt": "2026-11-16T06:20:00.000Z",
       "isFavorited": true
@@ -43,7 +43,7 @@
       "valueLevel": "valuable",
       "status": "pending_storage",
       "images": [],
-      "author": { "id": "usr_demo_vol", "name": "演示志愿者", "isVolunteer": true },
+      "author": { "id": "usr_demo_vol", "name": "李四", "isVolunteer": true },
       "storagePoint": { "id": "stp_demo_guard", "name": "保卫处失物招领点", "type": "security" },
       "createdAt": "2026-11-17T01:12:00.000Z",
       "isFavorited": false
@@ -59,7 +59,7 @@
       "valueLevel": "normal",
       "status": "stored",
       "images": [],
-      "author": { "id": "usr_demo_student", "name": "演示同学", "isVolunteer": false },
+      "author": { "id": "usr_demo_student", "name": "张三", "isVolunteer": false },
       "storagePoint": { "id": "stp_demo_dorm", "name": "宿舍服务中心", "type": "normal" },
       "createdAt": "2026-11-17T09:30:00.000Z",
       "isFavorited": false

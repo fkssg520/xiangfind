@@ -11,5 +11,6 @@ const counts = seedDemo(db);
 
 console.log('演示数据就绪：');
 for (const [k, v] of Object.entries(counts)) console.log(`  ${k.padEnd(10)} ${v}`);
-console.log(`  演示账号：20230001 / ${DEMO_PASSWORD}（学生）、20230002（志愿者）、90000001（管理员）`);
+console.log(`  演示账号：20230001 张三（学生）、20230002 李四（志愿者）、90000001 王五（管理员）`);
+console.log(`  密码：${DEMO_PASSWORD}`);
 db.close();

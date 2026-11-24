@@ -4,7 +4,7 @@
       "id": "msg_demo_1",
       "type": "claim",
       "title": "有人申请认领你的物品",
-      "body": "演示管理员申请认领「白色蓝牙耳机」，请到详情页处理。",
+      "body": "王五申请认领「白色蓝牙耳机」，请到详情页处理。",
       "relatedType": "item",
       "relatedId": "itm_demo_1",
       "important": true,

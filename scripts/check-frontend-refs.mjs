@@ -30,18 +30,23 @@ for (const m of js.matchAll(/^[ \t]*(?:const|let|var)\s*\{([^}]+)\}\s*=/gm)) {
     if (/^[A-Za-z_$][\w$]*$/.test(name)) declared.add(name);
   }
 }
-// 函数参数、箭头函数参数里出现的内层标识符（用宽松方式收集，避免误报）
-for (const m of js.matchAll(/function\s*[A-Za-z_$\w]*\s*\(([^)]*)\)/g)) {
-  for (const part of m[1].split(',')) {
-    const name = part.trim().split('=')[0].trim();
-    if (/^[A-Za-z_$][\w$]*$/.test(name)) declared.add(name);
+// 参数名提取：支持普通参数、默认值、{ a: b } 重命名、[a, b] 数组解构、...rest
+// 例：([title, list, labelOf]) => … 里的 labelOf 必须被算作"已声明"
+function paramNames(raw) {
+  const flat = String(raw).replace(/[[\]{}]/g, ' ');
+  const out = [];
+  for (const part of flat.split(',')) {
+    let name = part.split('=')[0].split(':').pop().replace(/\.\.\./, '').trim();
+    if (/^[A-Za-z_$][\w$]*$/.test(name)) out.push(name);
   }
+  return out;
 }
-for (const m of js.matchAll(/\(?\s*([A-Za-z_$\w,\s]*?)\s*\)?\s*=>/g)) {
-  for (const part of m[1].split(',')) {
-    const name = part.trim();
-    if (/^[A-Za-z_$][\w$]*$/.test(name)) declared.add(name);
-  }
+// 函数参数、箭头函数参数（含解构）里出现的内层标识符
+for (const m of js.matchAll(/function\s*[A-Za-z_$\w]*\s*\(([^)]*)\)/g)) {
+  for (const name of paramNames(m[1])) declared.add(name);
+}
+for (const m of js.matchAll(/(?:\(([^()]*)\)|([A-Za-z_$][\w$]*))\s*=>/g)) {
+  for (const name of paramNames(m[1] ?? m[2] ?? '')) declared.add(name);
 }
 
 // 2) 浏览器全局与语言内置（调用它们不算错）
