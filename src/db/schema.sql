@@ -23,6 +23,22 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- 2. 邮箱验证码
+-- 待注册：验证码通过后才写入 users（避免"未验证账号占住学号/邮箱"）
+CREATE TABLE IF NOT EXISTS pending_registrations (
+  id            TEXT PRIMARY KEY,
+  student_id    TEXT NOT NULL,
+  name          TEXT NOT NULL,
+  email         TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  code_hash     TEXT NOT NULL,
+  expires_at    TEXT NOT NULL,
+  attempts      INTEGER NOT NULL DEFAULT 0,
+  created_at    TEXT NOT NULL
+  );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_student ON pending_registrations(student_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_email ON pending_registrations(email);
+
 CREATE TABLE IF NOT EXISTS email_tokens (
   id          TEXT PRIMARY KEY,
   user_id     TEXT,
