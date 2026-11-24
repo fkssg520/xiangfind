@@ -2060,19 +2060,30 @@ async function renderDataPane(pane) {
   push('用户总数', (s.users || []).reduce((a, x) => a + x.c, 0));
   box.append(grid);
 
+  // 英文枚举 → 中文标签（后台不应该把 pending_storage 这种东西直接摊给管理员）
+  const statusLabel = (key) => {
+    for (const t of ['lost', 'found']) {
+      const hit = STATUS_MAP[t]?.[key];
+      if (hit) return hit[0];
+    }
+    return CLAIM_TEXT[key]?.[0] || key;
+  };
+  const typeLabel = (key) => (key === 'lost' ? '失物' : key === 'found' ? '招领' : key);
+
   const sections = [
-    ['按状态', s.items?.byStatus],
-    ['按分类', s.items?.byCategory],
-    ['按类型', s.items?.byType],
-    ['认领状态', s.claims],
-    ['近 7 日新增', s.daily],
-    ['用户角色', s.users],
+    ['按状态', s.items?.byStatus, statusLabel],
+    ['按分类', s.items?.byCategory, null],
+    ['按类型', s.items?.byType, typeLabel],
+    ['认领状态', s.claims, (k) => CLAIM_TEXT[k]?.[0] || k],
+    ['近 7 日新增', s.daily, null],
+    ['用户角色', s.users, (k) => ROLE_TEXT[k] || k],
   ];
-  sections.forEach(([title, list]) => {
+  sections.forEach(([title, list, labelOf]) => {
     if (!Array.isArray(list) || !list.length) return;
     box.append(el('h3', 'admin-sub', title));
     const rows = list.map((x) => {
-      const key = x.status || x.category || x.type || x.day || x.role || '';
+      const raw = x.status || x.category || x.type || x.day || x.role || '';
+      const key = labelOf ? labelOf(raw) : raw;
       return `${key}：${x.c}`;
     });
     box.append(el('p', 'modal-hint', rows.join('　|　')));
